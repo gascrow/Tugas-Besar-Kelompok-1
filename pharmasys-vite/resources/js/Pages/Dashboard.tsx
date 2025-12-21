@@ -3,8 +3,9 @@ import CountUp from 'react-countup';
 // Hapus PlaceholderPattern jika tidak digunakan
 // import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type PaginatedResponse } from '@/types';
 import { Head, usePage, Link, router } from '@inertiajs/react';
+import { useTranslation } from '@/hooks/use-translation';
 import { Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -67,6 +68,46 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Dashboard() {
+  const { t, language } = useTranslation();
+
+  // Simple translations for Dashboard - can be moved to global translations later
+  const dashboardTranslations = {
+    welcome: { id: 'Selamat Datang, {name}!', en: 'Welcome, {name}!' },
+    todaySales: { id: 'Penjualan Hari Ini', en: 'Today\'s Sales' },
+    availableCategories: { id: 'Kategori Tersedia', en: 'Available Categories' },
+    expiredMedicines: { id: 'Obat Kedaluwarsa', en: 'Expired Medicines' },
+    systemUsers: { id: 'Pengguna Sistem', en: 'System Users' },
+    recentSales: { id: 'Penjualan Terbaru', en: 'Recent Sales' },
+    salesByCategory: { id: 'Penjualan berdasarkan Kategori', en: 'Sales by Category' },
+    searchMedicine: { id: 'Cari obat...', en: 'Search medicine...' },
+    medicine: { id: 'Obat', en: 'Medicine' },
+    quantity: { id: 'Jml', en: 'Qty' },
+    price: { id: 'Harga', en: 'Price' },
+    date: { id: 'Tanggal', en: 'Date' },
+    noSalesData: { id: 'Tidak ada data penjualan.', en: 'No sales data available.' },
+    noDataGraph: { id: 'Tidak ada data untuk grafik.', en: 'No data available for Graph Report' },
+    showing: { id: 'Menampilkan', en: 'Showing' },
+    to: { id: 'sampai', en: 'to' },
+    of: { id: 'dari', en: 'of' },
+    entries: { id: 'entri', en: 'entries' },
+    previous: { id: 'Sebelumnya', en: 'Previous' },
+    next: { id: 'Selanjutnya', en: 'Next' },
+  };
+
+  // Helper function to get translated text
+  const dt = (key: string, params?: Record<string, string>) => {
+    const translation = dashboardTranslations[key as keyof typeof dashboardTranslations];
+    if (!translation) return key;
+
+    let text = translation[language as 'id' | 'en'];
+    if (params) {
+      Object.entries(params).forEach(([param, value]) => {
+        text = text.replace(`{${param}}`, value);
+      });
+    }
+    return text;
+  };
+
   const {
     props: {
       todaySales = 0,
@@ -166,7 +207,7 @@ export default function Dashboard() {
       <div className="flex-1 space-y-4 p-4">
         {/* Welcome Message - Reduced spacing */}
         <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
-          Selamat Datang, {auth?.user?.name || 'Admin'}!
+          {dt('welcome', { name: auth?.user?.name || 'Admin' })}
         </h1>
 
         {/* Top Summary Cards - Gunakan komponen Card */}
@@ -174,7 +215,7 @@ export default function Dashboard() {
           {/* Card Today's Sales */}
           <Card className="transition-all duration-300 ease-in-out hover:scale-105 hover:-translate-y-1 hover:rotate-y-2 hover:shadow-xl dark:hover:shadow-2xl dark:hover:shadow-green-500/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Sales</CardTitle>
+              <CardTitle className="text-sm font-medium">{dt('todaySales')}</CardTitle>
               <DollarSign className="h-5 w-5 text-green-600" />
             </CardHeader>
             <CardContent>
@@ -187,7 +228,7 @@ export default function Dashboard() {
           {/* Card Available Categories */}
           <Card className="transition-all duration-300 ease-in-out hover:scale-105 hover:-translate-y-1 hover:rotate-y-2 hover:shadow-xl dark:hover:shadow-2xl dark:hover:shadow-blue-500/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Available Categories</CardTitle>
+              <CardTitle className="text-sm font-medium">{dt('availableCategories')}</CardTitle>
               <LayoutGrid className="h-5 w-5 text-blue-600" />
             </CardHeader>
             <CardContent>
@@ -200,7 +241,7 @@ export default function Dashboard() {
           {/* Card Expired Medicines */}
           <Card className="transition-all duration-300 ease-in-out hover:scale-105 hover:-translate-y-1 hover:rotate-y-2 hover:shadow-xl dark:hover:shadow-2xl dark:hover:shadow-red-500/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
+              <CardTitle className="text-sm font-medium">{dt('expiredMedicines')}</CardTitle>
               <Archive className="h-5 w-5 text-red-600" />
             </CardHeader>
             <CardContent>
@@ -213,7 +254,7 @@ export default function Dashboard() {
            {/* Card System Users */}
           <Card className="transition-all duration-300 ease-in-out hover:scale-105 hover:-translate-y-1 hover:rotate-y-2 hover:shadow-xl dark:hover:shadow-2xl dark:hover:shadow-yellow-500/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">System Users</CardTitle>
+              <CardTitle className="text-sm font-medium">{dt('systemUsers')}</CardTitle>
               <Users className="h-5 w-5 text-yellow-600" />
             </CardHeader>
             <CardContent>
@@ -254,7 +295,7 @@ export default function Dashboard() {
                   <Input
                      type="text"
                      placeholder="Search medicine..."
-                     className="w-full sm:max-w-xs"
+                     className="w-full sm:max-w-xs border-2 border-gray-300 dark:border-gray-600 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
                      value={searchTerm}
                      onChange={(e) => setSearchTerm(e.target.value)}
                   />

@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Category } from '@/types';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -466,30 +466,23 @@ export default function ProdukCreate() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Tambah Produk Baru" />
-            <div className="container mx-auto py-6">
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-2xl font-bold">Tambah Produk Baru</h1>
-                    <Link
-                        href={route('produk.index')}
-                        className="inline-flex items-center px-4 py-2 bg-background border border-border rounded-md font-semibold text-xs text-foreground uppercase tracking-widest shadow-sm hover:bg-muted/80 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 transition"
-                    >
-                        Kembali ke Daftar Produk
-                    </Link>
-                </div>
-
-                <div className="bg-card text-card-foreground rounded-lg shadow overflow-hidden">
-                    <div className="p-6 bg-background">
-                        {availablePurchaseDetails.length === 0 ? (
-                            <Alert variant="destructive">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertTitle>Error</AlertTitle>
-                                <AlertDescription>
-                                    Tidak ada data pembelian yang tersedia. Silakan tambahkan data pembelian terlebih dahulu.
-                                </AlertDescription>
-                            </Alert>
-                        ) : (
-                            <form onSubmit={submit} className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Tambah Produk Baru</CardTitle>
+                    <CardDescription>Tambahkan produk baru dari data pembelian yang tersedia.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {availablePurchaseDetails.length === 0 ? (
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Error</AlertTitle>
+                            <AlertDescription>
+                                Tidak ada data pembelian yang tersedia. Silakan tambahkan data pembelian terlebih dahulu.
+                            </AlertDescription>
+                        </Alert>
+                    ) : (
+                        <form onSubmit={submit} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {/* Kolom Kiri */}
                                 <div className="space-y-4">
                                     <div>
@@ -508,10 +501,10 @@ export default function ProdukCreate() {
                                                     );
                                                     
                                                     return (
-                                                        <SelectItem 
-                                                            key={detail.id} 
+                                                        <SelectItem
+                                                            key={detail.id}
                                                             value={String(detail.id)}
-                                                            className={isRegistered ? 'bg-green-50' : ''}
+                                                            className={isRegistered ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : ''}
                                                         >
                                                             <div className="flex items-center justify-between">
                                                                 <span>{detail.nama_produk}</span>
@@ -537,7 +530,7 @@ export default function ProdukCreate() {
                                         <Input
                                             id="nama"
                                             value={data.nama}
-                                            className="mt-1 bg-gray-50"
+                                            className="mt-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                             readOnly
                                         />
                                     </div>
@@ -548,9 +541,9 @@ export default function ProdukCreate() {
                                             id="use_custom_name"
                                             checked={useCustomName}
                                             onChange={(e) => setUseCustomName(e.target.checked)}
-                                            className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                            className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 dark:text-indigo-400 shadow-sm focus:ring-indigo-500 dark:focus:ring-indigo-400 bg-white dark:bg-gray-800"
                                         />
-                                        <Label htmlFor="use_custom_name" className="text-sm font-medium text-gray-700">
+                                        <Label htmlFor="use_custom_name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                             Gunakan nama kustom
                                         </Label>
                                     </div>
@@ -625,7 +618,7 @@ export default function ProdukCreate() {
                                                 id="harga"
                                                 type="text"
                                                 value={data.harga ? new Intl.NumberFormat('id-ID').format(Number(data.harga)) : ''}
-                                                className="pl-12 bg-gray-50"
+                                                className="pl-12 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                                 readOnly
                                             />
                                         </div>
@@ -661,7 +654,7 @@ export default function ProdukCreate() {
                                             id="expired_at"
                                             type="date"
                                             value={data.expired_at}
-                                            className="mt-1 bg-gray-50"
+                                            className="mt-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                             readOnly
                                         />
                                         <InputError message={errors.expired_at} className="mt-1" />
@@ -671,11 +664,11 @@ export default function ProdukCreate() {
                                         <Label htmlFor="image">Gambar Produk</Label>
                                         {existingImageDisplay && !newImagePreview && (
                                             <div className="mt-2 mb-2">
-                                                <p className="text-sm text-gray-500">Gambar saat ini:</p>
-                                                <img 
-                                                    src={existingImageDisplay} 
-                                                    alt="Gambar produk" 
-                                                    className="h-24 w-24 object-cover rounded border border-gray-200 mt-1"
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Gambar saat ini:</p>
+                                                <img
+                                                    src={existingImageDisplay}
+                                                    alt="Gambar produk"
+                                                    className="h-24 w-24 object-cover rounded border border-gray-200 dark:border-gray-600 mt-1"
                                                 />
                                             </div>
                                         )}
@@ -696,11 +689,11 @@ export default function ProdukCreate() {
                                         )}
                                         {newImagePreview && (
                                             <div className="mt-2">
-                                                <p className="text-sm text-gray-500">Pratinjau gambar baru:</p>
-                                                <img 
-                                                    src={newImagePreview} 
-                                                    alt="Pratinjau gambar" 
-                                                    className="h-24 w-24 object-cover rounded border border-gray-200 mt-1"
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Pratinjau gambar baru:</p>
+                                                <img
+                                                    src={newImagePreview}
+                                                    alt="Pratinjau gambar"
+                                                    className="h-24 w-24 object-cover rounded border border-gray-200 dark:border-gray-600 mt-1"
                                                 />
                                             </div>
                                         )}
@@ -723,12 +716,11 @@ export default function ProdukCreate() {
                                 >
                                     {isSubmitting ? 'Menyimpan...' : 'Simpan Produk'}
                                 </button>
-                                </div>
-                            </form>
-                        )}
-                    </div>
-                </div>
-            </div>
+                            </div>
+                        </form>
+                    )}
+                </CardContent>
+            </Card>
         </AppLayout>
     );
 }

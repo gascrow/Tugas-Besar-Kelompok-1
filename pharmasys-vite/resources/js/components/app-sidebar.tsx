@@ -8,16 +8,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
 import { usePermission } from '@/hooks/use-permission';
 import { useTranslation } from '@/hooks/use-translation';
+import { useTheme } from '@/components/theme-provider';
 import AppLogo from './app-logo';
-import { 
-  LayoutGrid, Folder, ShoppingCart, Package, DollarSign, 
+import {
+  LayoutGrid, Folder, ShoppingCart, Package, DollarSign,
   User, BookOpen, Settings, ClipboardList, LogOut, X, ChevronLeft,
-  UserCircle, Moon, Sun, ChevronRight, ChevronDown, Menu as MenuIcon,
-  Globe
+  UserCircle, Moon, Sun, ChevronRight, ChevronDown, Menu as MenuIcon
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -31,12 +31,12 @@ interface SidebarProps {
 export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
   const [breakpoint, setBreakpoint] = useState<'mobile'|'tablet'|'desktop'>('desktop');
   const [mounted, setMounted] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const { auth } = usePage<SharedData>().props;
   const getInitials = useInitials();
   const { t, language, changeLanguage } = useTranslation();
   const { hasPermission, hasRole, hasAccess } = usePermission();
+  const { theme, setTheme } = useTheme();
 
   // Definisi menu berdasarkan bahasa saat ini dan hak akses pengguna
   const mainNavItems: NavItem[] = [
@@ -67,7 +67,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
           href: route('purchases.create'),
         } : null,
         {
-          title: 'Gudang',
+          title: t('warehouse'),
           href: route('purchases.products'),
         }
       ].filter(Boolean) as NavItem[],
@@ -98,16 +98,16 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     } : null,
     // Penjualan
     (hasAccess('view-sales-list') || hasAccess('create-sale')) ? {
-      title: t('Penjualan'),
+      title: t('sales'),
       href: route('sales.index'),
       icon: DollarSign,
       submenu: [
         {
-          title: 'Riwayat Penjualan',
+          title: t('sales.transactions'),
           href: route('sales.index'),
         },
         hasAccess('create-sale') ? {
-          title: 'Kasir',
+          title: t('sales.pos'),
           href: route('sales.create'),
         } : null
       ].filter(Boolean) as NavItem[],
@@ -120,23 +120,23 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     } : null,
     // Laporan (Reports)
     (hasAccess('view-sales-reports') || hasAccess('view-purchase')) ? {
-      title: t('Laporan'),
+      title: t('reports'),
       href: '#',
       icon: ClipboardList,
       submenu: [
         hasAccess('view-sales-reports') ? {
-          title: t('Laporan Penjualan'), // Will be translated as "Riwayat Penjualan"
+          title: t('reports.sales'),
           href: route('reports.sales'),
         } : null,
         hasAccess('view-purchase') ? {
-          title: t('Laporan Pembelian'),
+          title: t('reports.purchase'),
           href: route('reports.purchase'),
         } : null
       ].filter(Boolean) as NavItem[],
     } : null,
     // Hak Akses (Access Control)
     hasAccess('view-access-control') ? {
-      title: t('Hak Akses'),
+      title: t('access'),
       href: '#',
       icon: BookOpen,
       submenu: [
@@ -177,20 +177,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
   // Deteksi breakpoint dan perangkat
   useEffect(() => {
     setMounted(true);
-    
-    // Deteksi tema
-    const isSystemDarkMode = document.documentElement.classList.contains('dark');
-    setIsDarkMode(isSystemDarkMode);
-    applyThemeToSidebar(isSystemDarkMode);
-    
-    // Deteksi tema dari localStorage juga
-    const savedTheme = localStorage.getItem('vite-ui-theme');
-    if (savedTheme) {
-      const isDark = savedTheme === 'dark';
-      setIsDarkMode(isDark);
-      applyThemeToSidebar(isDark);
-    }
-    
+
     const handleResize = () => {
       const width = window.innerWidth;
       if (width < 640) {
@@ -207,54 +194,30 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     // Initial check
     handleResize();
     window.addEventListener('resize', handleResize);
-    
+
     // Listen untuk event perubahan bahasa
     const handleLanguageChange = () => {
       // Re-render sidebar saat bahasa berubah
       setMounted(prevState => !prevState);
     };
-    
+
     window.addEventListener('languageChanged', handleLanguageChange);
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('languageChanged', handleLanguageChange);
     };
   }, [setIsOpen]);
-  
-  // Function untuk mengaplikasikan tema ke sidebar
-  const applyThemeToSidebar = (isDark: boolean) => {
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) {
-      if (isDark) {
-        sidebar.classList.add('dark-theme');
-        sidebar.classList.remove('light-theme');
-      } else {
-        sidebar.classList.add('light-theme');
-        sidebar.classList.remove('dark-theme');
-      }
-    }
-  };
 
   // Perbaikan: daripada mengandalkan mounted, gunakan clientSide rendering
   if (typeof window === 'undefined') {
     return null;
   }
 
-  // Fungsi untuk toggle dark mode
-  const toggleDarkMode = () => {
-    // Toggle class pada document
-    document.documentElement.classList.toggle('dark');
-    
-    // Update state
-    const newDarkMode = !isDarkMode;
-    setIsDarkMode(newDarkMode);
-    
-    // Simpan ke localStorage
-    localStorage.setItem('vite-ui-theme', newDarkMode ? 'dark' : 'light');
-    
-    // Aplikasikan tema ke sidebar
-    applyThemeToSidebar(newDarkMode);
+  // Fungsi untuk toggle tema
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
   };
   
   // Fungsi untuk mengubah bahasa
@@ -285,7 +248,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
   
   // Dynamic sidebar classes based on breakpoint and open state
   const sidebarClasses = cn(
-    'fixed left-0 top-0 h-screen bg-gray-900 text-gray-100 overflow-hidden border-r shadow-lg flex flex-col z-40 transition-all duration-300 ease-in-out sidebar [perspective:800px]',
+    'fixed left-0 top-0 h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden border-r border-gray-200 dark:border-gray-800 shadow-lg flex flex-col z-40 transition-all duration-300 ease-in-out sidebar [perspective:800px]',
     // Width classes berdasarkan state dan breakpoint
     {
       // Desktop/tablet collapsed (ikon saja)
@@ -301,9 +264,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
       'translate-x-0': (isOpen || breakpoint !== 'mobile'),
       // Mobile - slide out ketika tertutup
       '-translate-x-full': !isOpen && breakpoint === 'mobile',
-    },
-    // Tema classes
-    isDarkMode ? 'dark-theme' : 'light-theme'
+    }
   );
 
   // Overlay for mobile
@@ -381,7 +342,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                   'flex items-center justify-between w-full rounded-md text-sm font-medium transition-all duration-200 ease-in-out py-2',
                   isActive(item.href.toString())
                     ? 'bg-green-600 text-white border-l-4 border-green-400 pl-2 pr-3 scale-100' // Active state
-                    : 'text-gray-300 px-3 hover:bg-gray-800 hover:text-white hover:scale-105 hover:-translate-y-px hover:rotate-y-1', // Non-active state with hover
+                    : 'text-gray-600 dark:text-gray-300 px-3 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white hover:scale-105 hover:-translate-y-px hover:rotate-y-1', // Non-active state with hover
                 )}
               >
                 <div className="flex items-center">
@@ -397,7 +358,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               
               {/* Render submenu accordion */}
               {isExpanded(item.title) && (
-                <div className="ml-8 pl-3 border-l border-gray-700 mt-1 mb-2 space-y-1">
+                <div className="ml-8 pl-3 border-l border-gray-700 dark:border-slate-600 mt-1 mb-2 space-y-1">
                   {item.submenu.map((subItem: NavItem, index: number) => (
                     <Link
                       key={`${item.title}-sub-${index}`}
@@ -406,7 +367,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                         'flex items-center rounded-md text-sm transition-all duration-200 ease-in-out py-2',
                         isActive(subItem.href.toString())
                           ? 'bg-green-600 text-white font-medium border-l-4 border-green-400 pl-2 pr-3 scale-100' // Active state
-                          : 'text-gray-400 px-3 hover:bg-gray-700 hover:text-white hover:scale-105 hover:-translate-y-px hover:translate-x-1', // Non-active state with hover
+                          : 'text-gray-500 dark:text-gray-400 px-3 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white hover:scale-105 hover:-translate-y-px hover:translate-x-1', // Non-active state with hover
                       )}
                     >
                       <span className="block transform transition-transform duration-200 ease-in-out group-hover:translate-x-0.5">{subItem.title}</span>
@@ -422,23 +383,23 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                 href={item.href}
                 className={cn(
                   'flex items-center rounded-md text-sm font-medium transition-all duration-150 ease-in-out',
-                  isActive(item.href.toString()) 
+                  isActive(item.href.toString())
                     ? 'bg-green-600 text-white' // Active state for collapsed
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white', // Non-active hover for collapsed
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white', // Non-active hover for collapsed
                   'justify-center p-2'
                 )}
               >
                 {item.icon && (
-                  <Icon 
-                    iconNode={item.icon} 
-                    className="h-5 w-5 shrink-0 transition-transform duration-150 ease-in-out group-hover:scale-110" 
+                  <Icon
+                    iconNode={item.icon}
+                    className="h-5 w-5 shrink-0 transition-transform duration-150 ease-in-out group-hover:scale-110"
                   />
                 )}
               </Link>
               {/* Tooltip for collapsed view */}
               <div className={cn(
                 "absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1",
-                "bg-gray-700 text-white text-xs rounded-md shadow-lg",
+                "bg-gray-700 dark:bg-slate-600 text-white dark:text-slate-100 text-xs rounded-md shadow-lg",
                 "opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-300 whitespace-nowrap",
                 "pointer-events-none" // Prevent tooltip from capturing mouse events
               )}>
@@ -459,15 +420,15 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             'flex items-center rounded-md text-sm font-medium transition-all duration-200 ease-in-out relative group', // Added relative group
             isActive(item.href.toString())
               ? 'bg-green-600 text-white border-l-4 border-green-400 scale-100' // Active state (expanded)
-              : 'text-gray-300 hover:bg-gray-800 hover:text-white hover:scale-105 hover:-translate-y-px hover:rotate-y-1', // Non-active state with hover (expanded)
+              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white hover:scale-105 hover:-translate-y-px hover:rotate-y-1', // Non-active state with hover (expanded)
             (isOpen || breakpoint === 'mobile')
               ? (isActive(item.href.toString()) ? 'pl-2 pr-3 py-2' : 'px-3 py-2') // Padding for expanded
               : cn( // Classes for collapsed view
                   'justify-center p-2',
                   isActive(item.href.toString())
                     ? 'bg-green-600 text-white border-l-4 border-green-500' // Active state (collapsed)
-                    : 'hover:bg-gray-700' // Non-active hover for collapsed
-                ) 
+                    : 'hover:bg-gray-700 dark:hover:bg-slate-600' // Non-active hover for collapsed
+                )
           )}
         >
           {item.icon && (
@@ -486,7 +447,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
           {!(isOpen || breakpoint === 'mobile') && (
             <div className={cn(
               "absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1",
-              "bg-gray-700 text-white text-xs rounded-md shadow-lg",
+              "bg-gray-700 dark:bg-slate-600 text-white dark:text-slate-100 text-xs rounded-md shadow-lg",
               "opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-300 whitespace-nowrap",
               "pointer-events-none"
             )}>
@@ -512,11 +473,11 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
       
       <div className={sidebarClasses}>
         {/* Header dengan toggle button */}
-        <div className="flex items-center justify-between p-3 border-b border-gray-800 h-14 shrink-0 relative">
+        <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-800 h-14 shrink-0 relative">
           <Link href="/dashboard" className="flex items-center">
-            <AppLogo className="text-white" size="sm" showText={isOpen} isCollapsed={!isOpen} />
+            <AppLogo className="text-gray-900 dark:text-gray-100" size="sm" showText={isOpen} isCollapsed={!isOpen} />
           </Link>
-          
+
           {/* Tombol toggle selalu terlihat */}
           {sidebarToggleBtn}
         </div>
@@ -529,68 +490,26 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
           </div>
           
           {/* Secondary Nav */}
-          <div className={cn("px-2 pt-2 border-t border-gray-800 mt-2", !isOpen && breakpoint !== 'mobile' ? "flex flex-col items-center" : "")}>
+          <div className={cn("px-2 pt-2 border-t border-gray-200 dark:border-gray-700 mt-2", !isOpen && breakpoint !== 'mobile' ? "flex flex-col items-center" : "")}>
             {secondaryNavItems.map(renderNavItem)}
-            
-            {/* Language Selector */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    'flex items-center rounded-md text-sm font-medium transition-colors mt-1',
-                    'hover:bg-gray-800 hover:text-white text-gray-300',
-                    isOpen || breakpoint === 'mobile' ? 'px-3 py-3 w-full justify-between' : 'justify-center p-3 w-full'
-                  )}
-                >
-                  <div className="flex items-center">
-                    <Globe className={cn("h-5 w-5 shrink-0", isOpen || breakpoint === 'mobile' ? "mr-3" : "")} />
-                    {(isOpen || breakpoint === 'mobile') && (
-                      <span className="transition-opacity duration-200">
-                        {language === 'id' ? t('indonesian') : t('english')}
-                      </span>
-                    )}
-                  </div>
-                  {(isOpen || breakpoint === 'mobile') && <ChevronRight className="h-4 w-4" />}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-gray-800 text-gray-100 border-gray-700">
-                <DropdownMenuItem 
-                  className={cn(
-                    'cursor-pointer',
-                    language === 'id' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
-                  )}
-                  onClick={() => handleChangeLanguage('id')}
-                >
-                  {t('indonesian')}
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  className={cn(
-                    'cursor-pointer',
-                    language === 'en' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
-                  )}
-                  onClick={() => handleChangeLanguage('en')}
-                >
-                  {t('english')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
+
             {/* Theme Toggle Button */}
             <button
               className={cn(
-                'flex items-center rounded-md text-sm font-medium transition-colors mt-1',
-                'hover:bg-gray-800 hover:text-white text-gray-300',
-                isOpen || breakpoint === 'mobile' ? 'px-3 py-3' : 'justify-center p-3 w-full'
+                'flex items-center rounded-md text-sm font-medium transition-all duration-200 mt-1',
+                'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white text-gray-600 dark:text-gray-300 hover:scale-105',
+                isOpen || breakpoint === 'mobile' ? 'px-3 py-3 w-full justify-start' : 'justify-center p-3 w-full'
               )}
-              onClick={toggleDarkMode}
+              onClick={toggleTheme}
             >
-              {isDarkMode ? 
-                <Sun className={cn("h-5 w-5 shrink-0", isOpen || breakpoint === 'mobile' ? "mr-3" : "")} /> : 
-                <Moon className={cn("h-5 w-5 shrink-0", isOpen || breakpoint === 'mobile' ? "mr-3" : "")} />
-              }
+              {theme === 'dark' ? (
+                <Sun className={cn("h-5 w-5 shrink-0 text-amber-500", isOpen || breakpoint === 'mobile' ? "mr-3" : "")} />
+              ) : (
+                <Moon className={cn("h-5 w-5 shrink-0 text-indigo-500", isOpen || breakpoint === 'mobile' ? "mr-3" : "")} />
+              )}
               {(isOpen || breakpoint === 'mobile') && (
-                <span className="transition-opacity duration-200">
-                  {isDarkMode ? t('light.mode') : t('dark.mode')}
+                <span className="transition-opacity duration-200 text-gray-700 dark:text-gray-200">
+                  {theme === 'dark' ? t('light.mode') : t('dark.mode')}
                 </span>
               )}
             </button>
@@ -599,23 +518,23 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
         
         {/* Footer with User Profile */}
         {auth?.user && (
-          <div className="p-3 border-t border-gray-800 mt-auto">
+          <div className="p-3 border-t border-gray-200 dark:border-gray-700 mt-auto">
             {isOpen || breakpoint === 'mobile' ? (
-              <div className="flex items-center p-2 rounded-md hover:bg-gray-800 transition-colors">
+              <div className="flex items-center p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                 <Avatar className="h-8 w-8 mr-2">
                   <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
-                  <AvatarFallback className="text-xs bg-gray-700 text-gray-200">
+                  <AvatarFallback className="text-xs bg-gray-600 dark:bg-slate-600 text-gray-200 dark:text-slate-200">
                     {getInitials(auth.user.name)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{auth.user.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{auth.user.email}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{auth.user.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{auth.user.email}</p>
                 </div>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="icon"
-                  className="h-8 w-8 rounded-full text-gray-400 hover:text-white"
+                  className="h-8 w-8 rounded-full text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4" />
@@ -625,14 +544,14 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               <div className="flex flex-col items-center gap-2">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
-                  <AvatarFallback className="text-xs bg-gray-700 text-gray-200">
+                  <AvatarFallback className="text-xs bg-gray-600 dark:bg-slate-600 text-gray-200 dark:text-slate-200">
                     {getInitials(auth.user.name)}
                   </AvatarFallback>
                 </Avatar>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="icon"
-                  className="h-8 w-8 rounded-full text-gray-400 hover:text-white"
+                  className="h-8 w-8 rounded-full text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4" />
