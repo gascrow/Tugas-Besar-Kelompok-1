@@ -112,6 +112,8 @@ export default function PurchaseCreate() {
     // State untuk tanggal pembayaran & status
     const [tanggalPembayaran, setTanggalPembayaran] = useState('');
     const [ppnPercentage, setPpnPercentage] = useState('0'); // State for PPN
+    // State untuk tracking manual override status
+    const [manualStatusOverride, setManualStatusOverride] = useState(false);
 
     // Hitung jumlah produk otomatis
     const jumlahProduk = details.length;
@@ -121,11 +123,24 @@ export default function PurchaseCreate() {
     const ppnAmountDisplay = (subTotalDisplay * (parseFloat(ppnPercentage) || 0)) / 100;
     const grandTotalDisplay = subTotalDisplay + ppnAmountDisplay; // Harus Dibayar
 
-    // Jika tanggal pembayaran diisi, status otomatis 'PAID'
+    // Logic status pembayaran dengan manual override
     useEffect(() => {
-        if (tanggalPembayaran) setStatus('PAID');
-        else setStatus('UNPAID');
-    }, [tanggalPembayaran]);
+        // Jika belum pernah di-override manual dan ada tanggal pembayaran, set ke PAID
+        if (!manualStatusOverride && tanggalPembayaran) {
+            setStatus('PAID');
+        }
+        // Jika belum pernah di-override manual dan tidak ada tanggal pembayaran, set ke UNPAID
+        else if (!manualStatusOverride && !tanggalPembayaran) {
+            setStatus('UNPAID');
+        }
+        // Jika sudah di-override manual, biarkan user memilih
+    }, [tanggalPembayaran, manualStatusOverride]);
+
+    // Handler untuk perubahan status manual
+    const handleStatusChange = (newStatus: string) => {
+        setStatus(newStatus);
+        setManualStatusOverride(true); // Mark as manually overridden
+    };
     // Handler perubahan header
     const handleHeaderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setHeader({ ...header, [e.target.name]: e.target.value });
@@ -356,6 +371,9 @@ export default function PurchaseCreate() {
                     sub_total: '0.00'
                 }]);
                 setPpnPercentage('0');
+                setStatus('UNPAID'); // Reset status
+                setTanggalPembayaran(''); // Reset tanggal pembayaran
+                setManualStatusOverride(false); // Reset manual override
                 
                 // Kembalikan daftar produk yang sudah ada
                 setAvailableProducts(existingProducts);
@@ -457,18 +475,30 @@ export default function PurchaseCreate() {
                                     <div className="bg-gray-800 text-white rounded px-3 py-2 font-bold">{jumlahProduk}</div>
                                 </div>
                                 <div>
-                                    <Label>Tanggal Pembayaran & Status</Label>
-                                    <div className="flex gap-2 items-center">
+                                    <Label>Tanggal Pembayaran</Label>
                                     <Input
-                                            id="tanggal_pembayaran"
-                                            name="tanggal_pembayaran"
-                                            type="date"
-                                            value={tanggalPembayaran}
-                                            onChange={e => setTanggalPembayaran(e.target.value)}
-                                            className="w-1/2"
+                                        id="tanggal_pembayaran"
+                                        name="tanggal_pembayaran"
+                                        type="date"
+                                        value={tanggalPembayaran}
+                                        onChange={e => setTanggalPembayaran(e.target.value)}
+                                        className="w-full"
                                     />
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${status === 'PAID' ? 'bg-green-700 text-green-200' : 'bg-gray-700 text-gray-300'}`}>{status === 'PAID' ? 'Sudah Dibayar' : 'Belum Dibayar'}</span>
-                                    </div>
+                                </div>
+                                <div>
+                                    <Label>Status Pembayaran</Label>
+                                    <Select value={status} onValueChange={handleStatusChange}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Pilih Status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="UNPAID">Belum Dibayar</SelectItem>
+                                            <SelectItem value="PAID">Sudah Dibayar</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {manualStatusOverride && (
+                                        <p className="text-xs text-blue-600 mt-1">Status diubah manual</p>
+                                    )}
                                 </div>
                                 <div>
                                     <Label htmlFor="keterangan">Keterangan</Label>
