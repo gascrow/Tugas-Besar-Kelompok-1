@@ -91,3 +91,6 @@ MAIL_ENCRYPTION=tls
 
 #### 9. Jalankan aplikasi
 `composer run dev`
+#### 9. Jalankan aplikasi
+`composer run dev`
+
