@@ -37,6 +37,7 @@ import { useState, useEffect, useMemo } from 'react';
 interface PurchaseDetail {
     id: number;
     purchase_id: number;
+    produk_id: number | null;
     purchase_no: string;
     supplier: string;
     nama_produk: string;
@@ -45,6 +46,7 @@ interface PurchaseDetail {
     harga_satuan: number;
     expired?: string;
     available_quantity: number;
+    is_registered?: boolean;
 }
 
 interface ExistingProductData {
@@ -478,23 +480,26 @@ export default function ProdukCreate() {
         }
     };
     
-    // Hitung ringkasan informasi
-    const itemsAlreadyProductCount = availablePurchaseDetails.filter(
-        (detail: PurchaseDetail) => Object.values(existingProductsData).some(
-            (p: any) => p.nama_produk === detail.nama_produk
-        )
+    // Hitung ringkasan informasi untuk produk yang sudah terdaftar
+    // Menggunakan flag is_registered dari controller (berdasarkan produk_id, bukan nama)
+    const availableItems = availablePurchaseDetails;
+    
+    // Hitung jumlah item yang sudah menjadi produk (menggunakan flag dari controller)
+    const itemsAlreadyProductCount = availablePurchaseDetails.filter(detail => 
+        detail.is_registered === true
     ).length;
     
     const totalSourceItems = availablePurchaseDetails.length;
+    const availableItemsCount = totalSourceItems - itemsAlreadyProductCount;
     
     let summaryMessage = '';
     if (totalSourceItems > 0) {
         if (itemsAlreadyProductCount === totalSourceItems) {
-            summaryMessage = "Semua item sumber yang tersedia sudah terdaftar sebagai produk.";
+            summaryMessage = "Semua item sumber yang tersedia sudah terdaftar sebagai produk. Tidak ada item baru yang bisa didaftarkan.";
         } else if (itemsAlreadyProductCount > 0) {
-            summaryMessage = `${itemsAlreadyProductCount} dari ${totalSourceItems} item sumber sudah terdaftar sebagai produk.`;
+            summaryMessage = `${availableItemsCount} dari ${totalSourceItems} item sumber tersedia untuk didaftarkan. ${itemsAlreadyProductCount} item sudah terdaftar sebagai produk (nonaktif).`;
         } else {
-            summaryMessage = "Tidak ada item sumber yang cocok dengan produk terdaftar. Produk baru akan dibuat.";
+            summaryMessage = "Tidak ada item sumber yang cocok dengan produk terdaftar. Semua item tersedia untuk didaftarkan.";
         }
     }
 
@@ -530,26 +535,26 @@ export default function ProdukCreate() {
                                                 <SelectValue placeholder="Pilih pembelian sumber" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {availablePurchaseDetails.map((detail) => {
-                                                    const isRegistered = Object.values(existingProductsData).some(
-                                                        p => p.nama_produk === detail.nama_produk
-                                                    );
-                                                    
+                                                {availableItems.map((detail) => {
+                                                    // Gunakan flag is_registered dari controller (berdasarkan produk_id)
+                                                    const isRegistered = detail.is_registered === true;
                                                     return (
                                                         <SelectItem
                                                             key={detail.id}
                                                             value={String(detail.id)}
-                                                            className={isRegistered ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : ''}
+                                                            disabled={isRegistered}
                                                         >
                                                             <div className="flex items-center justify-between">
-                                                                <span>{detail.nama_produk}</span>
+                                                                <span className={isRegistered ? 'text-gray-400' : ''}>
+                                                                    {detail.nama_produk}
+                                                                </span>
                                                                 {isRegistered && (
-                                                                    <span className="ml-2 text-xs text-green-600">
-                                                                        (Sudah terdaftar)
+                                                                    <span className="ml-2 text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">
+                                                                        Terdaftar
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <div className="text-xs text-gray-500">
+                                                            <div className={`text-xs ${isRegistered ? 'text-gray-400' : 'text-gray-500'}`}>
                                                                 {detail.purchase_no} - Stok: {detail.available_quantity} {detail.kemasan}
                                                             </div>
                                                         </SelectItem>
