@@ -117,12 +117,14 @@ export default function ProdukCreate() {
         purchase_detail_id: '',
         category_id: initialCategoryId ? String(initialCategoryId) : '',
         harga: '',
-        quantity: 1,
+        quantity: 0,
         margin: initialMargin !== null && initialMargin !== undefined 
             ? String(initialMargin) 
             : String(defaultProfitMargin),
         image: null as File | null,
         expired_at: '',
+        use_custom_harga: false,
+        custom_harga: '',
     });
     
     // State untuk UI
@@ -154,12 +156,12 @@ export default function ProdukCreate() {
     
     // Effect untuk menghitung harga jual saat margin atau purchase detail berubah
     useEffect(() => {
-        if (selectedPurchaseDetail && data.margin) {
+        if (selectedPurchaseDetail && data.margin && !data.use_custom_harga) {
             const cost = selectedPurchaseDetail.harga_satuan;
             const sellingPrice = calculateSellingPrice(cost, parseFloat(data.margin));
             setData('harga', sellingPrice.toString());
         }
-    }, [data.margin, selectedPurchaseDetail]);
+    }, [data.margin, selectedPurchaseDetail, data.use_custom_harga]);
     
     // Clean up image previews on unmount
     useEffect(() => {
@@ -170,6 +172,32 @@ export default function ProdukCreate() {
         };
     }, [newImagePreview]);
     
+    // Effect untuk menghitung margin saat custom harga berubah
+    useEffect(() => {
+        if (selectedPurchaseDetail && data.use_custom_harga && data.custom_harga) {
+            const cost = selectedPurchaseDetail.harga_satuan;
+            const customPrice = parseFloat(data.custom_harga);
+            
+            if (cost > 0 && customPrice > 0) {
+                // Hitung margin berdasarkan custom harga
+                const margin = ((customPrice - cost) / cost) * 100;
+                setData('margin', margin.toFixed(2));
+                setData('harga', customPrice.toString());
+            }
+        }
+    }, [data.custom_harga, selectedPurchaseDetail, data.use_custom_harga]);
+
+    // Effect untuk menghitung harga jual saat custom harga diaktifkan
+    useEffect(() => {
+        if (data.use_custom_harga && data.custom_harga) {
+            setData('harga', data.custom_harga);
+        } else if (!data.use_custom_harga && selectedPurchaseDetail && data.margin) {
+            const cost = selectedPurchaseDetail.harga_satuan;
+            const sellingPrice = calculateSellingPrice(cost, parseFloat(data.margin));
+            setData('harga', sellingPrice.toString());
+        }
+    }, [data.use_custom_harga, data.custom_harga, data.margin, selectedPurchaseDetail]);
+
     // Handle perubahan purchase detail
     useEffect(() => {
         if (selectedPurchaseDetail) {
@@ -194,6 +222,9 @@ export default function ProdukCreate() {
                 expired_at: selectedPurchaseDetail.expired || '',
                 category_id: existingProdData?.category_id ? String(existingProdData.category_id) : '',
                 margin: initialMargin,
+                quantity: selectedPurchaseDetail.available_quantity, // Set quantity otomatis
+                use_custom_harga: false, // Reset custom harga saat ganti produk
+                custom_harga: '', // Reset custom harga saat ganti produk
             });
 
             if (existingProdData?.image) {
@@ -225,7 +256,9 @@ export default function ProdukCreate() {
                 category_id: initialCategoryId ? String(initialCategoryId) : '',
                 custom_nama: initialProductName ? '' : data.custom_nama,
                 purchase_detail_id: '',
-                quantity: 1,
+                quantity: 0, // Reset quantity saat tidak ada produk
+                use_custom_harga: false, // Reset custom harga saat tidak ada produk
+                custom_harga: '', // Reset custom harga saat tidak ada produk
             });
             setUseCustomName(!initialProductName);
         }
@@ -245,12 +278,6 @@ export default function ProdukCreate() {
 
         if (!selectedPurchaseDetail) {
             newErrors.purchase_detail = 'Detail pembelian tidak valid';
-        } else {
-            if (!data.quantity || data.quantity <= 0) {
-                newErrors.quantity = 'Jumlah harus lebih dari 0';
-            } else if (data.quantity > selectedPurchaseDetail.available_quantity) {
-                newErrors.quantity = `Jumlah tidak boleh melebihi ${selectedPurchaseDetail.available_quantity}`;
-            }
         }
 
         if (data.margin && (isNaN(parseFloat(data.margin)) || parseFloat(data.margin) < 0)) {
@@ -290,8 +317,16 @@ export default function ProdukCreate() {
                 formData.append('category_id', data.category_id);
             }
             
-            if (data.margin) {
-                formData.append('margin', data.margin);
+            // Handle harga dan margin
+            if (data.use_custom_harga && data.custom_harga) {
+                // Jika menggunakan custom harga, kirim harga custom dan margin yang dihitung
+                formData.append('harga', data.custom_harga);
+                // Margin akan dihitung otomatis di backend berdasarkan harga custom
+            } else {
+                // Jika tidak menggunakan custom harga, kirim margin
+                if (data.margin) {
+                    formData.append('margin', data.margin);
+                }
             }
             
             // Handle gambar
@@ -413,7 +448,7 @@ export default function ProdukCreate() {
             category_id: '',
             margin: defaultProfitMargin?.toString() || '20',
             harga: '',
-            quantity: 1,
+            quantity: detail.available_quantity, // Set quantity otomatis
             custom_nama: '',
             expired_at: detail.expired || ''
         });
@@ -581,6 +616,19 @@ export default function ProdukCreate() {
                                         </Select>
                                         <InputError message={errors.category_id} className="mt-1" />
                                     </div>
+
+                                    <div>
+                                        <Label htmlFor="expired_at">Tanggal Kadaluarsa</Label>
+                                        <Input
+                                            id="expired_at"
+                                            type="date"
+                                            value={data.expired_at}
+                                            className="mt-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                            readOnly
+                                        />
+                                        <InputError message={errors.expired_at} className="mt-1" />
+                                    </div>
+
                                 </div>
 
                                 {/* Kolom Kanan */}
@@ -595,8 +643,9 @@ export default function ProdukCreate() {
                                                 step="0.01"
                                                 value={data.margin}
                                                 onChange={(e) => setData('margin', e.target.value)}
-                                                className={`pl-3 pr-12 ${formErrors.margin ? 'border-red-500' : ''}`}
-                                                required
+                                                className={`pl-3 pr-12 ${formErrors.margin ? 'border-red-500' : ''} ${data.use_custom_harga ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''}`}
+                                                required={!data.use_custom_harga}
+                                                disabled={data.use_custom_harga}
                                             />
                                             {formErrors.margin && (
                                                 <p className="mt-1 text-sm text-red-600">{formErrors.margin}</p>
@@ -605,11 +654,16 @@ export default function ProdukCreate() {
                                                 <span className="text-gray-500 sm:text-sm">%</span>
                                             </div>
                                         </div>
+                                        {data.use_custom_harga && (
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                Margin dihitung otomatis berdasarkan harga custom
+                                            </p>
+                                        )}
                                         <InputError message={errors.margin} className="mt-1" />
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="harga">Harga Jual (Otomatis)</Label>
+                                        <Label htmlFor="harga">Harga Jual</Label>
                                         <div className="mt-1 relative rounded-md shadow-sm">
                                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                                 <span className="text-gray-500 sm:text-sm">Rp</span>
@@ -618,46 +672,81 @@ export default function ProdukCreate() {
                                                 id="harga"
                                                 type="text"
                                                 value={data.harga ? new Intl.NumberFormat('id-ID').format(Number(data.harga)) : ''}
-                                                className="pl-12 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                                readOnly
+                                                className={`pl-12 ${data.use_custom_harga ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100' : 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}
+                                                readOnly={!data.use_custom_harga}
+                                                onChange={(e) => {
+                                                    if (data.use_custom_harga) {
+                                                        const value = e.target.value.replace(/\D/g, '');
+                                                        setData('custom_harga', value);
+                                                        setData('harga', value);
+                                                    }
+                                                }}
                                             />
                                         </div>
+                                        {data.use_custom_harga && (
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                Harga dapat diedit langsung saat custom harga diaktifkan
+                                            </p>
+                                        )}
                                         <InputError message={errors.harga} className="mt-1" />
                                     </div>
-
+                                            <div>
+                                            <Label htmlFor="use_custom_harga">Custom Harga</Label>
+                                            <div className="mt-1 flex items-center space-x-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id="use_custom_harga"
+                                                    checked={data.use_custom_harga}
+                                                    onChange={(e) => setData('use_custom_harga', e.target.checked)}
+                                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                />
+                                                <Label htmlFor="use_custom_harga" className="text-sm font-medium text-gray-700">
+                                                    Aktifkan custom harga
+                                                </Label>
+                                            </div>
+                                            {data.use_custom_harga && (
+                                                <div className="mt-2">
+                                                    <Label htmlFor="custom_harga">Harga Custom</Label>
+                                                    <div className="mt-1 relative rounded-md shadow-sm">
+                                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                            <span className="text-gray-500 sm:text-sm">Rp</span>
+                                                        </div>
+                                                        <Input
+                                                            id="custom_harga"
+                                                            type="number"
+                                                            min="0"
+                                                            step="100"
+                                                            value={data.custom_harga}
+                                                            onChange={(e) => {
+                                                                setData('custom_harga', e.target.value);
+                                                                setData('harga', e.target.value);
+                                                            }}
+                                                            className="pl-12"
+                                                            placeholder="Masukkan harga custom"
+                                                        />
+                                                    </div>
+                                                    <p className="mt-1 text-sm text-gray-500">
+                                                        Margin akan otomatis disesuaikan berdasarkan harga custom
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    
                                     <div>
-                                        <Label htmlFor="quantity">Jumlah *</Label>
+                                        <Label htmlFor="quantity">Jumlah</Label>
                                         <Input
                                             id="quantity"
                                             type="number"
-                                            min="1"
-                                            max={selectedPurchaseDetail ? selectedPurchaseDetail.available_quantity : undefined}
-                                            value={data.quantity}
-                                            onChange={(e) => setData('quantity', parseInt(e.target.value) || 0)}
-                                            className={`mt-1 ${formErrors.quantity ? 'border-red-500' : ''}`}
-                                            required
-                                        />
-                                        {formErrors.quantity && (
-                                            <p className="mt-1 text-sm text-red-600">{formErrors.quantity}</p>
-                                        )}
-                                        {selectedPurchaseDetail && (
-                                            <p className="mt-1 text-sm text-gray-500">
-                                                Tersedia: {selectedPurchaseDetail.available_quantity} {selectedPurchaseDetail.kemasan}
-                                            </p>
-                                        )}
-                                        <InputError message={errors.quantity} className="mt-1" />
-                                    </div>
-
-                                    <div>
-                                        <Label htmlFor="expired_at">Tanggal Kadaluarsa</Label>
-                                        <Input
-                                            id="expired_at"
-                                            type="date"
-                                            value={data.expired_at}
+                                            value={selectedPurchaseDetail ? selectedPurchaseDetail.available_quantity : ''}
                                             className="mt-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                             readOnly
                                         />
-                                        <InputError message={errors.expired_at} className="mt-1" />
+                                        {selectedPurchaseDetail && (
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                Jumlah otomatis sesuai stok tersedia: {selectedPurchaseDetail.available_quantity} {selectedPurchaseDetail.kemasan}
+                                            </p>
+                                        )}
+                                        <InputError message={errors.quantity} className="mt-1" />
                                     </div>
 
                                     <div>
