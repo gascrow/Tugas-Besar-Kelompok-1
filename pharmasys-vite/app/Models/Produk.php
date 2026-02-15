@@ -67,15 +67,22 @@ class Produk extends Model
     
     /**
      * Get the available stock quantity.
+     * Only counts non-expired purchase details.
      * Returns negative value if sold quantity exceeds purchased quantity.
      */
     public function getAvailableStockAttribute()
     {
-        $totalPurchased = $this->purchaseDetails()->sum('jumlah');
-        $totalSold = $this->saleItems()->sum('quantity');
-        
-        // Hitung stok yang tersedia (bisa negatif jika penjualan melebihi pembelian)
-        return $totalPurchased - $totalSold;
+        $today = now()->format('Y-m-d');
+
+        // Karena sistem menggunakan physical deduction (FIFO),
+        // stok sudah langsung dikurangi dari purchase_details saat transaksi.
+        // Jadi kita cukup menjumlahkan stok valid yang belum expired.
+        return $this->purchaseDetails()
+            ->where(function ($query) use ($today) {
+                $query->whereNull('expired')
+                      ->orWhere('expired', '>', $today);
+            })
+            ->sum('jumlah');
     }
     
     /**
@@ -113,10 +120,9 @@ class Produk extends Model
      */
     public function getHasInvalidStockAttribute()
     {
-        $totalPurchased = $this->purchaseDetails()->sum('jumlah');
-        $totalSold = $this->saleItems()->sum('quantity');
-        
-        return $totalSold > $totalPurchased;
+        // Dalam sistem physical deduction, stok tidak dihitung dari totalSold,
+        // sehingga kondisi invalid stock seharusnya tidak terjadi.
+        return false;
     }
     
     /**
@@ -124,10 +130,8 @@ class Produk extends Model
      */
     public function getInvalidStockQuantityAttribute()
     {
-        $totalPurchased = $this->purchaseDetails()->sum('jumlah');
-        $totalSold = $this->saleItems()->sum('quantity');
-        
-        return $totalSold - $totalPurchased;
+        // Tidak relevan dalam sistem physical deduction
+        return 0;
     }
     
     /**
