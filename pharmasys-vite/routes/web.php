@@ -183,6 +183,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:view-settings')->group(function() {
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings/reset-data', [SettingController::class, 'resetData'])->name('settings.resetData');
     });
 });
 

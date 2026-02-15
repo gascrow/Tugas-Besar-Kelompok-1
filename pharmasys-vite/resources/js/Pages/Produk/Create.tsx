@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Category } from '@/types';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -37,6 +37,7 @@ import { useState, useEffect, useMemo } from 'react';
 interface PurchaseDetail {
     id: number;
     purchase_id: number;
+    produk_id: number | null;
     purchase_no: string;
     supplier: string;
     nama_produk: string;
@@ -45,6 +46,7 @@ interface PurchaseDetail {
     harga_satuan: number;
     expired?: string;
     available_quantity: number;
+    is_registered?: boolean;
 }
 
 interface ExistingProductData {
@@ -117,12 +119,14 @@ export default function ProdukCreate() {
         purchase_detail_id: '',
         category_id: initialCategoryId ? String(initialCategoryId) : '',
         harga: '',
-        quantity: 1,
+        quantity: 0,
         margin: initialMargin !== null && initialMargin !== undefined 
             ? String(initialMargin) 
             : String(defaultProfitMargin),
         image: null as File | null,
         expired_at: '',
+        use_custom_harga: false,
+        custom_harga: '',
     });
     
     // State untuk UI
@@ -154,12 +158,12 @@ export default function ProdukCreate() {
     
     // Effect untuk menghitung harga jual saat margin atau purchase detail berubah
     useEffect(() => {
-        if (selectedPurchaseDetail && data.margin) {
+        if (selectedPurchaseDetail && data.margin && !data.use_custom_harga) {
             const cost = selectedPurchaseDetail.harga_satuan;
             const sellingPrice = calculateSellingPrice(cost, parseFloat(data.margin));
             setData('harga', sellingPrice.toString());
         }
-    }, [data.margin, selectedPurchaseDetail]);
+    }, [data.margin, selectedPurchaseDetail, data.use_custom_harga]);
     
     // Clean up image previews on unmount
     useEffect(() => {
@@ -170,6 +174,32 @@ export default function ProdukCreate() {
         };
     }, [newImagePreview]);
     
+    // Effect untuk menghitung margin saat custom harga berubah
+    useEffect(() => {
+        if (selectedPurchaseDetail && data.use_custom_harga && data.custom_harga) {
+            const cost = selectedPurchaseDetail.harga_satuan;
+            const customPrice = parseFloat(data.custom_harga);
+            
+            if (cost > 0 && customPrice > 0) {
+                // Hitung margin berdasarkan custom harga
+                const margin = ((customPrice - cost) / cost) * 100;
+                setData('margin', margin.toFixed(2));
+                setData('harga', customPrice.toString());
+            }
+        }
+    }, [data.custom_harga, selectedPurchaseDetail, data.use_custom_harga]);
+
+    // Effect untuk menghitung harga jual saat custom harga diaktifkan
+    useEffect(() => {
+        if (data.use_custom_harga && data.custom_harga) {
+            setData('harga', data.custom_harga);
+        } else if (!data.use_custom_harga && selectedPurchaseDetail && data.margin) {
+            const cost = selectedPurchaseDetail.harga_satuan;
+            const sellingPrice = calculateSellingPrice(cost, parseFloat(data.margin));
+            setData('harga', sellingPrice.toString());
+        }
+    }, [data.use_custom_harga, data.custom_harga, data.margin, selectedPurchaseDetail]);
+
     // Handle perubahan purchase detail
     useEffect(() => {
         if (selectedPurchaseDetail) {
@@ -194,6 +224,9 @@ export default function ProdukCreate() {
                 expired_at: selectedPurchaseDetail.expired || '',
                 category_id: existingProdData?.category_id ? String(existingProdData.category_id) : '',
                 margin: initialMargin,
+                quantity: selectedPurchaseDetail.available_quantity, // Set quantity otomatis
+                use_custom_harga: false, // Reset custom harga saat ganti produk
+                custom_harga: '', // Reset custom harga saat ganti produk
             });
 
             if (existingProdData?.image) {
@@ -225,7 +258,9 @@ export default function ProdukCreate() {
                 category_id: initialCategoryId ? String(initialCategoryId) : '',
                 custom_nama: initialProductName ? '' : data.custom_nama,
                 purchase_detail_id: '',
-                quantity: 1,
+                quantity: 0, // Reset quantity saat tidak ada produk
+                use_custom_harga: false, // Reset custom harga saat tidak ada produk
+                custom_harga: '', // Reset custom harga saat tidak ada produk
             });
             setUseCustomName(!initialProductName);
         }
@@ -245,12 +280,6 @@ export default function ProdukCreate() {
 
         if (!selectedPurchaseDetail) {
             newErrors.purchase_detail = 'Detail pembelian tidak valid';
-        } else {
-            if (!data.quantity || data.quantity <= 0) {
-                newErrors.quantity = 'Jumlah harus lebih dari 0';
-            } else if (data.quantity > selectedPurchaseDetail.available_quantity) {
-                newErrors.quantity = `Jumlah tidak boleh melebihi ${selectedPurchaseDetail.available_quantity}`;
-            }
         }
 
         if (data.margin && (isNaN(parseFloat(data.margin)) || parseFloat(data.margin) < 0)) {
@@ -290,8 +319,16 @@ export default function ProdukCreate() {
                 formData.append('category_id', data.category_id);
             }
             
-            if (data.margin) {
-                formData.append('margin', data.margin);
+            // Handle harga dan margin
+            if (data.use_custom_harga && data.custom_harga) {
+                // Jika menggunakan custom harga, kirim harga custom dan margin yang dihitung
+                formData.append('harga', data.custom_harga);
+                // Margin akan dihitung otomatis di backend berdasarkan harga custom
+            } else {
+                // Jika tidak menggunakan custom harga, kirim margin
+                if (data.margin) {
+                    formData.append('margin', data.margin);
+                }
             }
             
             // Handle gambar
@@ -413,7 +450,7 @@ export default function ProdukCreate() {
             category_id: '',
             margin: defaultProfitMargin?.toString() || '20',
             harga: '',
-            quantity: 1,
+            quantity: detail.available_quantity, // Set quantity otomatis
             custom_nama: '',
             expired_at: detail.expired || ''
         });
@@ -443,53 +480,49 @@ export default function ProdukCreate() {
         }
     };
     
-    // Hitung ringkasan informasi
-    const itemsAlreadyProductCount = availablePurchaseDetails.filter(
-        (detail: PurchaseDetail) => Object.values(existingProductsData).some(
-            (p: any) => p.nama_produk === detail.nama_produk
-        )
+    // Hitung ringkasan informasi untuk produk yang sudah terdaftar
+    // Menggunakan flag is_registered dari controller (berdasarkan produk_id, bukan nama)
+    const availableItems = availablePurchaseDetails;
+    
+    // Hitung jumlah item yang sudah menjadi produk (menggunakan flag dari controller)
+    const itemsAlreadyProductCount = availablePurchaseDetails.filter(detail => 
+        detail.is_registered === true
     ).length;
     
     const totalSourceItems = availablePurchaseDetails.length;
+    const availableItemsCount = totalSourceItems - itemsAlreadyProductCount;
     
     let summaryMessage = '';
     if (totalSourceItems > 0) {
         if (itemsAlreadyProductCount === totalSourceItems) {
-            summaryMessage = "Semua item sumber yang tersedia sudah terdaftar sebagai produk.";
+            summaryMessage = "Semua item sumber yang tersedia sudah terdaftar sebagai produk. Tidak ada item baru yang bisa didaftarkan.";
         } else if (itemsAlreadyProductCount > 0) {
-            summaryMessage = `${itemsAlreadyProductCount} dari ${totalSourceItems} item sumber sudah terdaftar sebagai produk.`;
+            summaryMessage = `${availableItemsCount} dari ${totalSourceItems} item sumber tersedia untuk didaftarkan. ${itemsAlreadyProductCount} item sudah terdaftar sebagai produk (nonaktif).`;
         } else {
-            summaryMessage = "Tidak ada item sumber yang cocok dengan produk terdaftar. Produk baru akan dibuat.";
+            summaryMessage = "Tidak ada item sumber yang cocok dengan produk terdaftar. Semua item tersedia untuk didaftarkan.";
         }
     }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Tambah Produk Baru" />
-            <div className="container mx-auto py-6">
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-2xl font-bold">Tambah Produk Baru</h1>
-                    <Link
-                        href={route('produk.index')}
-                        className="inline-flex items-center px-4 py-2 bg-background border border-border rounded-md font-semibold text-xs text-foreground uppercase tracking-widest shadow-sm hover:bg-muted/80 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 transition"
-                    >
-                        Kembali ke Daftar Produk
-                    </Link>
-                </div>
-
-                <div className="bg-card text-card-foreground rounded-lg shadow overflow-hidden">
-                    <div className="p-6 bg-background">
-                        {availablePurchaseDetails.length === 0 ? (
-                            <Alert variant="destructive">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertTitle>Error</AlertTitle>
-                                <AlertDescription>
-                                    Tidak ada data pembelian yang tersedia. Silakan tambahkan data pembelian terlebih dahulu.
-                                </AlertDescription>
-                            </Alert>
-                        ) : (
-                            <form onSubmit={submit} className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Tambah Produk Baru</CardTitle>
+                    <CardDescription>Tambahkan produk baru dari data pembelian yang tersedia.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {availablePurchaseDetails.length === 0 ? (
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Error</AlertTitle>
+                            <AlertDescription>
+                                Tidak ada data pembelian yang tersedia. Silakan tambahkan data pembelian terlebih dahulu.
+                            </AlertDescription>
+                        </Alert>
+                    ) : (
+                        <form onSubmit={submit} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {/* Kolom Kiri */}
                                 <div className="space-y-4">
                                     <div>
@@ -502,26 +535,26 @@ export default function ProdukCreate() {
                                                 <SelectValue placeholder="Pilih pembelian sumber" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {availablePurchaseDetails.map((detail) => {
-                                                    const isRegistered = Object.values(existingProductsData).some(
-                                                        p => p.nama_produk === detail.nama_produk
-                                                    );
-                                                    
+                                                {availableItems.map((detail) => {
+                                                    // Gunakan flag is_registered dari controller (berdasarkan produk_id)
+                                                    const isRegistered = detail.is_registered === true;
                                                     return (
-                                                        <SelectItem 
-                                                            key={detail.id} 
+                                                        <SelectItem
+                                                            key={detail.id}
                                                             value={String(detail.id)}
-                                                            className={isRegistered ? 'bg-green-50' : ''}
+                                                            disabled={isRegistered}
                                                         >
                                                             <div className="flex items-center justify-between">
-                                                                <span>{detail.nama_produk}</span>
+                                                                <span className={isRegistered ? 'text-gray-400' : ''}>
+                                                                    {detail.nama_produk}
+                                                                </span>
                                                                 {isRegistered && (
-                                                                    <span className="ml-2 text-xs text-green-600">
-                                                                        (Sudah terdaftar)
+                                                                    <span className="ml-2 text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">
+                                                                        Terdaftar
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <div className="text-xs text-gray-500">
+                                                            <div className={`text-xs ${isRegistered ? 'text-gray-400' : 'text-gray-500'}`}>
                                                                 {detail.purchase_no} - Stok: {detail.available_quantity} {detail.kemasan}
                                                             </div>
                                                         </SelectItem>
@@ -537,7 +570,7 @@ export default function ProdukCreate() {
                                         <Input
                                             id="nama"
                                             value={data.nama}
-                                            className="mt-1 bg-gray-50"
+                                            className="mt-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                             readOnly
                                         />
                                     </div>
@@ -548,9 +581,9 @@ export default function ProdukCreate() {
                                             id="use_custom_name"
                                             checked={useCustomName}
                                             onChange={(e) => setUseCustomName(e.target.checked)}
-                                            className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                            className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 dark:text-indigo-400 shadow-sm focus:ring-indigo-500 dark:focus:ring-indigo-400 bg-white dark:bg-gray-800"
                                         />
-                                        <Label htmlFor="use_custom_name" className="text-sm font-medium text-gray-700">
+                                        <Label htmlFor="use_custom_name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                             Gunakan nama kustom
                                         </Label>
                                     </div>
@@ -588,6 +621,19 @@ export default function ProdukCreate() {
                                         </Select>
                                         <InputError message={errors.category_id} className="mt-1" />
                                     </div>
+
+                                    <div>
+                                        <Label htmlFor="expired_at">Tanggal Kadaluarsa</Label>
+                                        <Input
+                                            id="expired_at"
+                                            type="date"
+                                            value={data.expired_at}
+                                            className="mt-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                            readOnly
+                                        />
+                                        <InputError message={errors.expired_at} className="mt-1" />
+                                    </div>
+
                                 </div>
 
                                 {/* Kolom Kanan */}
@@ -602,8 +648,9 @@ export default function ProdukCreate() {
                                                 step="0.01"
                                                 value={data.margin}
                                                 onChange={(e) => setData('margin', e.target.value)}
-                                                className={`pl-3 pr-12 ${formErrors.margin ? 'border-red-500' : ''}`}
-                                                required
+                                                className={`pl-3 pr-12 ${formErrors.margin ? 'border-red-500' : ''} ${data.use_custom_harga ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''}`}
+                                                required={!data.use_custom_harga}
+                                                disabled={data.use_custom_harga}
                                             />
                                             {formErrors.margin && (
                                                 <p className="mt-1 text-sm text-red-600">{formErrors.margin}</p>
@@ -612,11 +659,16 @@ export default function ProdukCreate() {
                                                 <span className="text-gray-500 sm:text-sm">%</span>
                                             </div>
                                         </div>
+                                        {data.use_custom_harga && (
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                Margin dihitung otomatis berdasarkan harga custom
+                                            </p>
+                                        )}
                                         <InputError message={errors.margin} className="mt-1" />
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="harga">Harga Jual (Otomatis)</Label>
+                                        <Label htmlFor="harga">Harga Jual</Label>
                                         <div className="mt-1 relative rounded-md shadow-sm">
                                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                                 <span className="text-gray-500 sm:text-sm">Rp</span>
@@ -625,57 +677,92 @@ export default function ProdukCreate() {
                                                 id="harga"
                                                 type="text"
                                                 value={data.harga ? new Intl.NumberFormat('id-ID').format(Number(data.harga)) : ''}
-                                                className="pl-12 bg-gray-50"
-                                                readOnly
+                                                className={`pl-12 ${data.use_custom_harga ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100' : 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}
+                                                readOnly={!data.use_custom_harga}
+                                                onChange={(e) => {
+                                                    if (data.use_custom_harga) {
+                                                        const value = e.target.value.replace(/\D/g, '');
+                                                        setData('custom_harga', value);
+                                                        setData('harga', value);
+                                                    }
+                                                }}
                                             />
                                         </div>
+                                        {data.use_custom_harga && (
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                Harga dapat diedit langsung saat custom harga diaktifkan
+                                            </p>
+                                        )}
                                         <InputError message={errors.harga} className="mt-1" />
                                     </div>
-
+                                            <div>
+                                            <Label htmlFor="use_custom_harga">Custom Harga</Label>
+                                            <div className="mt-1 flex items-center space-x-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id="use_custom_harga"
+                                                    checked={data.use_custom_harga}
+                                                    onChange={(e) => setData('use_custom_harga', e.target.checked)}
+                                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                />
+                                                <Label htmlFor="use_custom_harga" className="text-sm font-medium text-gray-700">
+                                                    Aktifkan custom harga
+                                                </Label>
+                                            </div>
+                                            {data.use_custom_harga && (
+                                                <div className="mt-2">
+                                                    <Label htmlFor="custom_harga">Harga Custom</Label>
+                                                    <div className="mt-1 relative rounded-md shadow-sm">
+                                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                            <span className="text-gray-500 sm:text-sm">Rp</span>
+                                                        </div>
+                                                        <Input
+                                                            id="custom_harga"
+                                                            type="number"
+                                                            min="0"
+                                                            step="100"
+                                                            value={data.custom_harga}
+                                                            onChange={(e) => {
+                                                                setData('custom_harga', e.target.value);
+                                                                setData('harga', e.target.value);
+                                                            }}
+                                                            className="pl-12"
+                                                            placeholder="Masukkan harga custom"
+                                                        />
+                                                    </div>
+                                                    <p className="mt-1 text-sm text-gray-500">
+                                                        Margin akan otomatis disesuaikan berdasarkan harga custom
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    
                                     <div>
-                                        <Label htmlFor="quantity">Jumlah *</Label>
+                                        <Label htmlFor="quantity">Jumlah</Label>
                                         <Input
                                             id="quantity"
                                             type="number"
-                                            min="1"
-                                            max={selectedPurchaseDetail ? selectedPurchaseDetail.available_quantity : undefined}
-                                            value={data.quantity}
-                                            onChange={(e) => setData('quantity', parseInt(e.target.value) || 0)}
-                                            className={`mt-1 ${formErrors.quantity ? 'border-red-500' : ''}`}
-                                            required
+                                            value={selectedPurchaseDetail ? selectedPurchaseDetail.available_quantity : ''}
+                                            className="mt-1 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                            readOnly
                                         />
-                                        {formErrors.quantity && (
-                                            <p className="mt-1 text-sm text-red-600">{formErrors.quantity}</p>
-                                        )}
                                         {selectedPurchaseDetail && (
                                             <p className="mt-1 text-sm text-gray-500">
-                                                Tersedia: {selectedPurchaseDetail.available_quantity} {selectedPurchaseDetail.kemasan}
+                                                Jumlah otomatis sesuai stok tersedia: {selectedPurchaseDetail.available_quantity} {selectedPurchaseDetail.kemasan}
                                             </p>
                                         )}
                                         <InputError message={errors.quantity} className="mt-1" />
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="expired_at">Tanggal Kadaluarsa</Label>
-                                        <Input
-                                            id="expired_at"
-                                            type="date"
-                                            value={data.expired_at}
-                                            className="mt-1 bg-gray-50"
-                                            readOnly
-                                        />
-                                        <InputError message={errors.expired_at} className="mt-1" />
-                                    </div>
-
-                                    <div>
                                         <Label htmlFor="image">Gambar Produk</Label>
                                         {existingImageDisplay && !newImagePreview && (
                                             <div className="mt-2 mb-2">
-                                                <p className="text-sm text-gray-500">Gambar saat ini:</p>
-                                                <img 
-                                                    src={existingImageDisplay} 
-                                                    alt="Gambar produk" 
-                                                    className="h-24 w-24 object-cover rounded border border-gray-200 mt-1"
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Gambar saat ini:</p>
+                                                <img
+                                                    src={existingImageDisplay}
+                                                    alt="Gambar produk"
+                                                    className="h-24 w-24 object-cover rounded border border-gray-200 dark:border-gray-600 mt-1"
                                                 />
                                             </div>
                                         )}
@@ -696,11 +783,11 @@ export default function ProdukCreate() {
                                         )}
                                         {newImagePreview && (
                                             <div className="mt-2">
-                                                <p className="text-sm text-gray-500">Pratinjau gambar baru:</p>
-                                                <img 
-                                                    src={newImagePreview} 
-                                                    alt="Pratinjau gambar" 
-                                                    className="h-24 w-24 object-cover rounded border border-gray-200 mt-1"
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Pratinjau gambar baru:</p>
+                                                <img
+                                                    src={newImagePreview}
+                                                    alt="Pratinjau gambar"
+                                                    className="h-24 w-24 object-cover rounded border border-gray-200 dark:border-gray-600 mt-1"
                                                 />
                                             </div>
                                         )}
@@ -723,12 +810,11 @@ export default function ProdukCreate() {
                                 >
                                     {isSubmitting ? 'Menyimpan...' : 'Simpan Produk'}
                                 </button>
-                                </div>
-                            </form>
-                        )}
-                    </div>
-                </div>
-            </div>
+                            </div>
+                        </form>
+                    )}
+                </CardContent>
+            </Card>
         </AppLayout>
     );
 }

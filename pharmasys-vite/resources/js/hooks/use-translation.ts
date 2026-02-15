@@ -28,6 +28,7 @@ const translations: Translations = {
   'reports': { id: 'Laporan', en: 'Reports' },
   'reports.sales': { id: 'Riwayat Penjualan', en: 'Sales History' },
   'reports.purchase': { id: 'Laporan Pembelian', en: 'Purchase Report' },
+  'warehouse': { id: 'Gudang', en: 'Warehouse' },
   'access': { id: 'Hak Akses', en: 'Access Rights' },
   'users': { id: 'Pengguna', en: 'Users' },
   'roles': { id: 'Peran', en: 'Roles' },
@@ -243,4 +244,4 @@ export function useTranslation() {
   };
 
   return { t, language, changeLanguage };
-} 
+}

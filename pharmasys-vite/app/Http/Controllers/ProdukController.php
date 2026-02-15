@@ -182,7 +182,7 @@ class ProdukController extends Controller
         $categories = Category::orderBy('name')->get(['id', 'name']);
         $defaultProfitMargin = (float) Setting::getValue('default_profit_margin', 20);
         
-        $purchaseDetails = PurchaseDetail::with(['purchase'])
+        $purchaseDetails = PurchaseDetail::with(['purchase', 'produk'])
             ->whereNull('produk_id')
             ->orWhere(function($query) {
                 $query->whereNotNull('produk_id')
@@ -190,10 +190,19 @@ class ProdukController extends Controller
             })
             ->get();
         
-        $availablePurchaseDetails = $purchaseDetails->map(function($detail) {
+        // Ambil ID produk yang sudah terdaftar sebagai produk aktif
+        $activeProductIds = Produk::where('status', Produk::STATUS_ACTIVE)
+            ->pluck('id')
+            ->toArray();
+        
+        $availablePurchaseDetails = $purchaseDetails->map(function($detail) use ($activeProductIds) {
+            // Periksa apakah purchase detail ini terkait dengan produk aktif
+            $isRegistered = $detail->produk_id !== null && in_array($detail->produk_id, $activeProductIds);
+            
             return [
                 'id' => $detail->id,
                 'purchase_id' => $detail->purchase_id,
+                'produk_id' => $detail->produk_id, // Tambahkan produk_id untuk referensi
                 'purchase_no' => $detail->purchase->no_faktur ?? 'Unknown',
                 'supplier' => $detail->purchase->pbf ?? 'Unknown',
                 'nama_produk' => $detail->nama_produk,
@@ -202,16 +211,20 @@ class ProdukController extends Controller
                 'harga_satuan' => $detail->harga_satuan,
                 'expired' => $detail->expired ? $detail->expired->format('Y-m-d') : null,
                 'available_quantity' => $detail->jumlah,
+                'is_registered' => $isRegistered, // Flag untuk menandai sudah terdaftar atau belum
             ];
         });
         
-        // Get all products and create a mapping of product names to their data
+        // Get only ACTIVE products and create a mapping of product IDs to their data
+        // This ensures that products with status 'draft' or 'inactive' can still be re-registered
         $existingProductsData = Produk::select('id', 'nama', 'category_id', 'margin', 'image')
+                                    ->where('status', Produk::STATUS_ACTIVE)
                                     ->get()
                                     ->mapWithKeys(function ($produk) {
                                         return [
-                                            $produk->nama => [
+                                            $produk->id => [  // Gunakan ID sebagai key, bukan nama
                                                 'id' => $produk->id,
+                                                'nama' => $produk->nama,
                                                 'category_id' => $produk->category_id,
                                                 'margin' => $produk->margin,
                                                 'image' => $produk->image,

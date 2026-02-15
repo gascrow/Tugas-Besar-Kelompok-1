@@ -285,7 +285,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                 tabIndex={6}
                                 className="font-medium text-emerald-300 transition duration-150 ease-in-out hover:text-emerald-200"
                             >
-                                {t('contact.admin')}
+                                Create account
                             </TextLink>
                         </div>
 

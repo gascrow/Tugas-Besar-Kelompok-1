@@ -43,5 +43,54 @@ DB_PASSWORD=password_database
 #### 7. Build Assets
 `npm run build`
 
-#### 8. Jalankan aplikasi
+#### 8. Setup Email untuk Forgot Password (Opsional)
+
+Untuk mengaktifkan fitur lupa password, konfigurasi email di file `.env`:
+
+**Untuk Gmail:**
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=your-email@gmail.com
+MAIL_FROM_NAME=PharmaSys
+```
+
+**Untuk Yahoo:**
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mail.yahoo.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@yahoo.com
+MAIL_PASSWORD=your-app-password
+MAIL_ENCRYPTION=tls
+```
+
+**Untuk Outlook:**
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp-mail.outlook.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@outlook.com
+MAIL_PASSWORD=your-password
+MAIL_ENCRYPTION=tls
+```
+
+**Untuk Mailgun/SendGrid (Production):**
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailgun.org
+MAIL_PORT=587
+MAIL_USERNAME=postmaster@sandboxxxxxx.mailgun.org
+MAIL_PASSWORD=your-mailgun-password
+MAIL_ENCRYPTION=tls
+```
+
+#### 9. Jalankan aplikasi
 `composer run dev`
+#### 9. Jalankan aplikasi
+`composer run dev`
+

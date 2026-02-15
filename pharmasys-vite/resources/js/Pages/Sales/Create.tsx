@@ -62,7 +62,7 @@ export default function SalesCreate() {
 
 
     const { data, setData, post, errors, processing, reset } = useForm({
-        payment_method: 'Cash',
+        payment_method: '',
         amount_paid: '',
         items: null, // Add items here so errors.items is a known key
     });
@@ -325,7 +325,7 @@ export default function SalesCreate() {
                                     <span>Rp {totalPrice.toLocaleString('id-ID', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
                                 </div>
                                 <div>
-                                    <Label htmlFor="payment_method">{t('Metode Pembayaran')}</Label>
+                                    <Label htmlFor="payment_method">{t('Metode Pembayaran')} *</Label>
                                     <Select 
                                         value={data.payment_method} 
                                         onValueChange={(value) => setData('payment_method', value)}
@@ -343,7 +343,7 @@ export default function SalesCreate() {
                                     <InputError message={errors.payment_method as string | undefined} className="mt-2" />
                                 </div>
                                 <div>
-                                    <Label htmlFor="amount_paid">{t('amount.paid')}</Label>
+                                    <Label htmlFor="amount_paid">{t('amount.paid')} *</Label>
                                     <Input
                                         id="amount_paid"
                                         type="number"
@@ -363,7 +363,7 @@ export default function SalesCreate() {
                                 <Button
                                     type="submit"
                                     className="w-full bg-green-600 hover:bg-green-700 text-white"
-                                    disabled={processing || cart.length === 0 || parseFloat(data.amount_paid) < totalPrice}
+                                    disabled={processing || cart.length === 0 || parseFloat(data.amount_paid) < totalPrice || !data.payment_method || !data.amount_paid}
                                 >
                                     {processing ? t('processing') : t('complete.sale')}
                                 </Button>

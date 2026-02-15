@@ -1,5 +1,13 @@
 // Bootstrap file for initializing global components and configurations
 
+import axios from 'axios';
+
+// Configure axios for API calls
+window.axios = axios;
+window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+window.axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+window.axios.defaults.withCredentials = true;
+
 // Performance optimizations
 // Detect connection speed
 function detectConnectionSpeed() {
@@ -118,7 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
 declare global {
     interface Window {
         lazyLoadObserver: IntersectionObserver;
+        axios: typeof axios;
     }
 }
 
-export {}; 
+export {};

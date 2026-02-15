@@ -57,7 +57,7 @@ class SaleController extends Controller
     {
         $today = now()->format('Y-m-d');
         
-        $products = Produk::with(['purchaseDetails' => function($query) use ($today) {
+$products = Produk::with(['purchaseDetails' => function($query) use ($today) {
             $query->where('jumlah', '>', 0)
                 ->where(function($q) use ($today) {
                     $q->where('expired', '>', $today)
@@ -78,18 +78,25 @@ class SaleController extends Controller
             // Hanya ambil produk yang memiliki stok valid (tidak kadaluarsa)
             return $product->purchaseDetails->sum('jumlah') > 0;
         })
-        ->map(function($product) {
-            $validStock = $product->purchaseDetails->sum('jumlah');
-            
+        ->map(function($product) use ($today) {
+            // Karena menggunakan physical deduction (FIFO),
+            // stok sudah langsung dikurangi dari purchase_details saat transaksi.
+            $validPurchaseDetails = $product->purchaseDetails->filter(function($detail) use ($today) {
+                return $detail->jumlah > 0 && 
+                       ($detail->expired === null || $detail->expired > $today);
+            })->sortBy('expired');
+
+            $availableStock = $validPurchaseDetails->sum('jumlah');
+
             return [
                 'id' => $product->id,
                 'nama' => $product->nama,
                 'harga' => $product->harga,
-                'quantity' => $validStock,
+                'quantity' => max(0, $availableStock), // Never show negative stock
                 'image' => $product->image,
             ];
         });
-        
+
         return Inertia::render('Sales/Create', [
             'products' => $products
         ]);
@@ -150,12 +157,10 @@ class SaleController extends Controller
             }
             
             // Dapatkan data produk lengkap untuk perhitungan stok
-            $produk = Produk::with(['purchaseDetails', 'saleItems'])->findOrFail($itemData['produk_id']);
-            
-            // Hitung stok yang tersedia dengan lebih akurat
-            $totalPurchased = $produk->purchaseDetails->sum('jumlah');
-            $totalSold = $produk->saleItems->sum('quantity');
-            $availableStock = $totalPurchased - $totalSold;
+            $produk = Produk::findOrFail($itemData['produk_id']);
+
+            // Gunakan available_stock dari model yang sudah diperbaiki
+            $availableStock = $produk->available_stock;
             
             // Cek stok yang tersedia setelah transaksi ini
             $stockAfterTransaction = $availableStock - $itemData['quantity'];
@@ -198,21 +203,25 @@ class SaleController extends Controller
                     'price' => $price,
                 ]);
 
-                // Reduce stock from purchase details with additional validation
+                // Reduce stock from valid (non-expired) purchase details only
                 $remainingQty = $itemData['quantity'];
                 $deductedDetails = [];
-                
-                // Sort by expired date (FIFO - First In First Out)
-                $purchaseDetails = $produk->purchaseDetails->sortBy('expired');
-                
-                foreach ($purchaseDetails as $detail) {
+
+                // Sort by expired date (FIFO - First In First Out), only valid stock
+                $today = now()->format('Y-m-d');
+                $validPurchaseDetails = $produk->purchaseDetails->filter(function($detail) use ($today) {
+                    return $detail->jumlah > 0 &&
+                           ($detail->expired === null || $detail->expired > $today);
+                })->sortBy('expired');
+
+                foreach ($validPurchaseDetails as $detail) {
                     if ($remainingQty <= 0) break;
-                    
+
                     // Pastikan jumlah yang akan dikurangi tidak melebihi stok yang ada
                     $deductQty = min($remainingQty, max(0, $detail->jumlah));
-                    
+
                     if ($deductQty > 0) {
-                        $detail->jumlah -= $deductQty;
+$detail->jumlah -= $deductQty;
                         $detail->save();
                         $deductedDetails[] = [
                             'purchase_detail_id' => $detail->id,
@@ -221,9 +230,23 @@ class SaleController extends Controller
                             'after' => $detail->jumlah
                         ];
                         $remainingQty -= $deductQty;
+                    } else {
+                        // If not enough stock in this detail, reduce what's available
+                        $availableQty = $detail->jumlah;
+                        if ($availableQty > 0) {
+                            $detail->jumlah = 0;
+                            $detail->save();
+                            $deductedDetails[] = [
+                                'purchase_detail_id' => $detail->id,
+                                'quantity' => $availableQty,
+                                'before' => $availableQty,
+                                'after' => 0
+                            ];
+                            $remainingQty -= $availableQty;
+                        }
                     }
                 }
-                
+
                 // Jika masih ada sisa yang belum terpotong (seharusnya tidak terjadi karena sudah divalidasi)
                 if ($remainingQty > 0) {
                     Log::error('Insufficient stock for product ID: ' . $produk->id . 
@@ -239,15 +262,19 @@ class SaleController extends Controller
                     'deductions' => $deductedDetails
                 ]);
                 
-                // Refresh to get latest stock data
+// Refresh to get latest stock data
                 $produk->refresh();
-                
+
+                // Force refresh of available_stock attribute
+                $produk->load('purchaseDetails', 'saleItems');
+                $produk->refresh();
+
                 // Collect products that are now low in stock
                 if ($produk->is_low_stock) {
                     $lowStockProducts[] = $produk;
                 }
             }
-            
+
             // Create notifications for low stock products
             if (!empty($lowStockProducts)) {
                 $notificationService = app(\App\Services\NotificationService::class);
@@ -346,11 +373,11 @@ class SaleController extends Controller
             $sale->delete();
 
             DB::commit();
-            return redirect()->back()->with('success', 'Transaksi berhasil dihapus.');
+            return redirect()->route('sales.index')->with('success', 'Transaksi berhasil dihapus.');
         } catch (Exception $e) {
             DB::rollback();
             Log::error('Error deleting sale: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Gagal menghapus transaksi');
+            return redirect()->route('sales.index')->with('error', 'Gagal menghapus transaksi');
         }
     }
 }

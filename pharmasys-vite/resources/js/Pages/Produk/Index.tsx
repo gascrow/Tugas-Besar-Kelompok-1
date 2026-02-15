@@ -198,7 +198,7 @@ export default function ProdukIndex() {
                     placeholder="Search products..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="max-w-sm"
+                    className="max-w-sm border-2 border-gray-300 dark:border-gray-600 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
                 />
                 <Select value={String(filters.perPage)} onValueChange={handlePerPageChange}>
                     <SelectTrigger className="w-[180px]">
