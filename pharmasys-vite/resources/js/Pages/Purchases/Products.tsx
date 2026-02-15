@@ -45,6 +45,7 @@ interface Props {
 }
 
 export default function Products({ purchaseDetails, filters: initialFilters }: Props) {
+    const [purchaseDetailsState, setPurchaseDetails] = useState<PurchaseDetailProps[]>(purchaseDetails);
     const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
     const [selectedSupplier, setSelectedSupplier] = useState(initialFilters?.supplier || 'all');
     const [selectedCategory, setSelectedCategory] = useState(initialFilters?.category || 'all');
@@ -85,23 +86,23 @@ export default function Products({ purchaseDetails, filters: initialFilters }: P
     // For now, this is client-side filtering.
 
     const uniqueSuppliers = useMemo(() => {
-        const suppliers = new Set(purchaseDetails.map(detail => detail.supplier));
+        const suppliers = new Set(purchaseDetailsState.map(detail => detail.supplier));
         return ["all", ...Array.from(suppliers)];
-    }, [purchaseDetails]);
+    }, [purchaseDetailsState]);
 
     const uniqueCategories = useMemo(() => {
-        const categories = new Set(purchaseDetails.map(detail => detail.kategori_produk).filter(Boolean) as string[]);
+        const categories = new Set(purchaseDetailsState.map(detail => detail.kategori_produk).filter(Boolean) as string[]);
         return ["all", ...Array.from(categories)];
-    }, [purchaseDetails]);
+    }, [purchaseDetailsState]);
     
     const filteredPurchaseDetails = useMemo(() => {
-        return purchaseDetails.filter(detail => {
+        return purchaseDetailsState.filter(detail => {
             const nameMatch = detail.nama_produk.toLowerCase().includes(searchTerm.toLowerCase());
             const supplierMatch = selectedSupplier === 'all' || detail.supplier === selectedSupplier;
             const categoryMatch = selectedCategory === 'all' || detail.kategori_produk === selectedCategory;
             return nameMatch && supplierMatch && categoryMatch;
         });
-    }, [purchaseDetails, searchTerm, selectedSupplier, selectedCategory]);
+    }, [purchaseDetailsState, searchTerm, selectedSupplier, selectedCategory]);
 
 
     const transformToProductCardData = (detail: PurchaseDetailProps): ProductCardData => {
@@ -155,7 +156,7 @@ export default function Products({ purchaseDetails, filters: initialFilters }: P
                 formData.append('supplier', product.supplier || '');
                 
                 // Use axios directly instead of Inertia's router to avoid scroll issues
-                await axios.post(route('produk.store'), formData, {
+                const response = await axios.post(route('produk.store'), formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data',
                         'X-Requested-With': 'XMLHttpRequest',
@@ -163,15 +164,43 @@ export default function Products({ purchaseDetails, filters: initialFilters }: P
                     }
                 });
                 
-                processed++;
-                console.log('Product registered successfully:', product.nama_produk);
+                // Check if the response indicates success
+                if (response.status === 200 || response.status === 201) {
+                    processed++;
+                    console.log('Product registered successfully:', product.nama_produk);
+                } else {
+                    failed++;
+                    console.error('Failed to register product (HTTP Error):', product.nama_produk, response.status);
+                }
                 
                 // Small delay between requests to prevent overwhelming the server
                 await new Promise(resolve => setTimeout(resolve, 300));
                 
-            } catch (error) {
-                console.error('Failed to register product:', product.nama_produk, error);
-                failed++;
+            } catch (error: unknown) {
+                // Check if it's a validation error (422) which might mean product already exists
+                if (error && typeof error === 'object' && 'response' in error) {
+                    const axiosError = error as { response?: { status: number; data: any } };
+                    if (axiosError.response && axiosError.response.status === 422) {
+                        // If validation error, check if it's because product already exists
+                        const errorData = axiosError.response.data;
+                        if (errorData.errors && errorData.errors.nama && 
+                            errorData.errors.nama.some((msg: string) => msg.includes('sudah ada'))) {
+                            // Product already exists, count as success
+                            processed++;
+                            console.log('Product already exists (counted as success):', product.nama_produk);
+                        } else {
+                            failed++;
+                            console.error('Validation error for product:', product.nama_produk, errorData);
+                        }
+                    } else {
+                        failed++;
+                        console.error('Failed to register product:', product.nama_produk, axiosError);
+                    }
+                } else {
+                    failed++;
+                    console.error('Failed to register product:', product.nama_produk, error);
+                }
+                
                 // Continue with next product even if this one failed
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
@@ -182,13 +211,39 @@ export default function Products({ purchaseDetails, filters: initialFilters }: P
         setRegisterAllDialogOpen(false);
         
         if (processed > 0) {
-            // Show summary first
-            alert(`${processed} produk berhasil didaftarkan! ${failed} produk gagal didaftarkan.`);
+            // Show success message first
+            alert(`${processed} produk berhasil didaftarkan!`);
+            
+            // Update the purchase details state to reflect the changes
+            // Mark the registered products as listed
+            setPurchaseDetails(prevDetails => 
+                prevDetails.map(detail => 
+                    unregisteredProducts.some(p => p.id === detail.id) 
+                        ? { ...detail, is_listed_as_product: true }
+                        : detail
+                )
+            );
             
             // Then do a full page reload to ensure all data is fresh
             window.location.reload();
         } else {
-            alert('Tidak ada produk yang berhasil didaftarkan. Silakan coba lagi.');
+            // If no products were processed, check if it's because they already exist
+            // In this case, we should still consider it a success
+            const alreadyExistsCount = unregisteredProducts.length;
+            if (alreadyExistsCount > 0) {
+                alert(`${alreadyExistsCount} produk berhasil terdaftar`);
+                // Still update the state to reflect they are now listed
+                setPurchaseDetails(prevDetails => 
+                    prevDetails.map(detail => 
+                        unregisteredProducts.some(p => p.id === detail.id) 
+                            ? { ...detail, is_listed_as_product: true }
+                            : detail
+                    )
+                );
+                window.location.reload();
+            } else {
+                alert('Tidak ada produk yang berhasil didaftarkan. Silakan coba lagi.');
+            }
         }
     };
 
@@ -260,11 +315,11 @@ export default function Products({ purchaseDetails, filters: initialFilters }: P
                 </Card>
 
 
-                {purchaseDetails.length > 0 && (
+                {purchaseDetailsState.length > 0 && (
                     <div className="mb-6 p-4 bg-blue-50 border border-blue-200 text-blue-700 rounded-md shadow-sm dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300">
                         {(() => {
-                            const totalItems = purchaseDetails.length; // Original total
-                            const listedInOriginal = purchaseDetails.filter(d => d.is_listed_as_product).length;
+                            const totalItems = purchaseDetailsState.length; // Original total
+                            const listedInOriginal = purchaseDetailsState.filter(d => d.is_listed_as_product).length;
                             const displayedItems = filteredPurchaseDetails.length;
                             
                             let message = `${displayedItems} dari ${totalItems} item pembelian ditampilkan. `;

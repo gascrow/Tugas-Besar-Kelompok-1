@@ -373,11 +373,11 @@ $detail->jumlah -= $deductQty;
             $sale->delete();
 
             DB::commit();
-            return redirect()->back()->with('success', 'Transaksi berhasil dihapus.');
+            return redirect()->route('sales.index')->with('success', 'Transaksi berhasil dihapus.');
         } catch (Exception $e) {
             DB::rollback();
             Log::error('Error deleting sale: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Gagal menghapus transaksi');
+            return redirect()->route('sales.index')->with('error', 'Gagal menghapus transaksi');
         }
     }
 }
