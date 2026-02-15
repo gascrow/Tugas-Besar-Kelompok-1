@@ -1,8 +1,8 @@
 // Placeholder Page
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, usePage, useForm, Link } from '@inertiajs/react';
-import { type FormDataConvertible } from '@inertiajs/core'; // FormDataType removed from here
+import { Head, usePage, useForm, Link, router } from '@inertiajs/react';
+import { type FormDataConvertible } from '@inertiajs/core';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,8 @@ import InputError from "@/components/InputError";
 import { FlashMessage } from '@/components/flash-message';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Upload, Image, Info, Globe, DollarSign } from 'lucide-react';
+import { Settings as SettingsIcon, Upload, Image, Info, Globe, DollarSign, Trash2, AlertTriangle } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Interface for the specific shape of the settings form data
 interface SettingsFormShape {
@@ -26,15 +27,22 @@ interface SettingsFormShape {
     remove_favicon: boolean;
     low_stock_threshold: number;
     default_profit_margin: number;
-    // No index signature here
 }
 
-// Define props for the page, including what Inertia provides
-// Define FormDataType locally as it's not directly exported by @inertiajs/core
 type FormDataType = Record<string, FormDataConvertible>;
 
+interface DataCounts {
+    produk: number;
+    purchase: number;
+    purchase_detail: number;
+    sale: number;
+    sale_item: number;
+    supplier: number;
+    category: number;
+}
+
 interface SettingsPageProps {
-    settings: { // This is the structure coming from the controller
+    settings: {
         app_name: string;
         app_currency: string;
         app_logo?: string | null;
@@ -43,6 +51,7 @@ interface SettingsPageProps {
         low_stock_threshold: number;
         default_profit_margin: number;
     };
+    dataCounts?: DataCounts;
     flash?: {
         success?: string;
         error?: string;
@@ -51,7 +60,6 @@ interface SettingsPageProps {
     [key: string]: any; 
 }
 
-
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: route('dashboard') },
     { title: 'Settings', href: route('settings.index') },
@@ -59,16 +67,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function SettingsIndex() {
-    const { settings, flash, errors: pageLevelErrors } = usePage<SettingsPageProps>().props;
+    const page = usePage<SettingsPageProps>();
+    const { settings, dataCounts, flash, errors: pageLevelErrors } = page.props;
     const [activeTab, setActiveTab] = useState("general");
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
     
-    const initialSettingsData: SettingsFormShape = { // Typed with the clean shape
+    // State for reset data
+    const [resetOptions, setResetOptions] = useState<string[]>([]);
+    const [isResetting, setIsResetting] = useState(false);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    
+    const initialSettingsData: SettingsFormShape = {
         app_name: settings.app_name ?? 'PharmaSys',
         app_currency: settings.app_currency ?? 'Rp',
-        app_logo: null, // Initialize optional file fields with null instead of undefined
-        app_favicon: null, // Initialize optional file fields with null instead of undefined
+        app_logo: null,
+        app_favicon: null,
         language: settings.language ?? 'id',
         current_logo: settings.app_logo ?? null,
         current_favicon: settings.app_favicon ?? null,
@@ -78,11 +92,9 @@ export default function SettingsIndex() {
         default_profit_margin: settings.default_profit_margin ?? 20,
     };
     
-    // Use an intersection type for useForm's generic argument and cast initialData
     const { data, setData, post, errors: formErrors, processing, reset } = useForm<SettingsFormShape & FormDataType>(initialSettingsData as (SettingsFormShape & FormDataType));
 
     useEffect(() => {
-        // Set preview untuk logo dan favicon yang sudah ada
         if (settings.app_logo) {
             setLogoPreview(`/storage/${settings.app_logo}`);
         }
@@ -96,61 +108,108 @@ export default function SettingsIndex() {
         post(route('settings.update'), {
             preserveScroll: true,
             onSuccess: () => {
-                // Reset file inputs setelah submit berhasil
                 reset('app_logo', 'app_favicon');
             }
         });
     }
 
-    // Handler untuk file logo
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setData('app_logo', file);
-            
-            // Set preview
             const reader = new FileReader();
             reader.onload = (e) => {
                 setLogoPreview(e.target?.result as string);
             };
             reader.readAsDataURL(file);
-            
-            // Reset remove flag jika user memilih file baru
             setData('remove_logo', false);
         }
     };
     
-    // Handler untuk file favicon
     const handleFaviconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setData('app_favicon', file);
-            
-            // Set preview
             const reader = new FileReader();
             reader.onload = (e) => {
                 setFaviconPreview(e.target?.result as string);
             };
             reader.readAsDataURL(file);
-            
-            // Reset remove flag jika user memilih file baru
             setData('remove_favicon', false);
         }
     };
     
-    // Handler untuk menghapus logo
     const handleRemoveLogo = () => {
         setData('remove_logo', true);
         setData('app_logo', null);
         setLogoPreview(null);
     };
     
-    // Handler untuk menghapus favicon
     const handleRemoveFavicon = () => {
         setData('remove_favicon', true);
         setData('app_favicon', null);
         setFaviconPreview(null);
     };
+
+    // Reset data handlers
+    const toggleResetOption = (option: string) => {
+        if (option === 'all') {
+            if (resetOptions.includes('all')) {
+                setResetOptions([]);
+            } else {
+                setResetOptions(['all']);
+            }
+        } else {
+            const newOptions = resetOptions.filter(o => o !== 'all');
+            if (newOptions.includes(option)) {
+                setResetOptions(newOptions.filter(o => o !== option));
+            } else {
+                setResetOptions([...newOptions, option]);
+            }
+        }
+    };
+
+    const handleResetData = () => {
+        if (resetOptions.length === 0) {
+            window.toastr?.error('Pilih minimal satu data yang ingin direset');
+            return;
+        }
+        setShowResetConfirm(true);
+    };
+
+    const confirmResetData = () => {
+        setIsResetting(true);
+        
+        const formData = new FormData();
+        resetOptions.forEach(option => {
+            formData.append('reset_options[]', option);
+        });
+
+        router.post(route('settings.resetData'), formData, {
+            onSuccess: () => {
+                setIsResetting(false);
+                setShowResetConfirm(false);
+                setResetOptions([]);
+                // Reload page to get updated counts
+                router.reload({ only: ['dataCounts'] });
+            },
+            onError: () => {
+                setIsResetting(false);
+                setShowResetConfirm(false);
+                window.toastr?.error('Gagal mereset data');
+            }
+        });
+    };
+
+    const resetDataOptions = [
+        { id: 'products', label: 'Produk', count: dataCounts?.produk || 0 },
+        { id: 'purchase_details', label: 'Detail Pembelian', count: dataCounts?.purchase_detail || 0 },
+        { id: 'purchases', label: 'Pembelian', count: dataCounts?.purchase || 0 },
+        { id: 'sale_items', label: 'Item Penjualan', count: dataCounts?.sale_item || 0 },
+        { id: 'sales', label: 'Penjualan', count: dataCounts?.sale || 0 },
+        { id: 'suppliers', label: 'Supplier', count: dataCounts?.supplier || 0 },
+        { id: 'categories', label: 'Kategori', count: dataCounts?.category || 0 },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -164,7 +223,7 @@ export default function SettingsIndex() {
             </div>
             
             <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="mb-6 w-full max-w-md">
+                <TabsList className="mb-6 w-full max-w-lg">
                     <TabsTrigger value="general" className="flex items-center gap-2">
                         <SettingsIcon className="h-4 w-4" />
                         <span>Umum</span>
@@ -176,6 +235,10 @@ export default function SettingsIndex() {
                     <TabsTrigger value="language" className="flex items-center gap-2">
                         <Globe className="h-4 w-4" />
                         <span>Bahasa</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="reset" className="flex items-center gap-2 text-red-600">
+                        <Trash2 className="h-4 w-4" />
+                        <span>Reset Data</span>
                     </TabsTrigger>
                 </TabsList>
                 
@@ -200,9 +263,7 @@ export default function SettingsIndex() {
                                             className="mt-1 block w-full"
                                             required
                                         />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Nama untuk aplikasi ini
-                                        </p>
+                                        <p className="text-sm text-gray-500 mt-1">Nama untuk aplikasi ini</p>
                                         <InputError message={formErrors.app_name} className="mt-2" />
                                     </div>
                                     
@@ -216,9 +277,7 @@ export default function SettingsIndex() {
                                             className="mt-1 block w-full"
                                             required
                                         />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Simbol mata uang (contoh: Rp, $, €)
-                                        </p>
+                                        <p className="text-sm text-gray-500 mt-1">Simbol mata uang (contoh: Rp, $, €)</p>
                                         <InputError message={formErrors.app_currency} className="mt-2" />
                                     </div>
                                 </div>
@@ -238,9 +297,7 @@ export default function SettingsIndex() {
                                             required
                                             min="0"
                                         />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Batas minimum stok sebelum produk ditandai "Stok Sedikit".
-                                        </p>
+                                        <p className="text-sm text-gray-500 mt-1">Batas minimum stok sebelum produk ditandai "Stok Sedikit".</p>
                                         <InputError message={formErrors.low_stock_threshold} className="mt-2" />
                                     </div>
                                     <div>
@@ -259,9 +316,7 @@ export default function SettingsIndex() {
                                             min="0"
                                             step="0.01"
                                         />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Margin keuntungan default untuk perhitungan harga jual produk.
-                                        </p>
+                                        <p className="text-sm text-gray-500 mt-1">Margin keuntungan default untuk perhitungan harga jual produk.</p>
                                         <InputError message={formErrors.default_profit_margin} className="mt-2" />
                                     </div>
                                 </div>
@@ -281,35 +336,15 @@ export default function SettingsIndex() {
                                     <div className="mt-2 flex items-center gap-4">
                                         {logoPreview && (
                                             <div className="relative">
-                                                <img 
-                                                    src={logoPreview} 
-                                                    alt="Logo Preview" 
-                                                    className="h-16 w-auto object-contain rounded border p-1"
-                                                />
+                                                <img src={logoPreview} alt="Logo Preview" className="h-16 w-auto object-contain rounded border p-1" />
                                             </div>
                                         )}
                                         <div className="flex-1">
-                                            <Input 
-                                                id="app_logo" 
-                                                name="app_logo" 
-                                                type="file" 
-                                                onChange={handleLogoChange} 
-                                                className="mt-1 block w-full cursor-pointer"
-                                                accept="image/*"
-                                            />
-                                            <p className="text-sm text-gray-500 mt-1">
-                                                Disarankan ukuran gambar 150px x 150px
-                                            </p>
+                                            <Input id="app_logo" name="app_logo" type="file" onChange={handleLogoChange} className="mt-1 block w-full cursor-pointer" accept="image/*" />
+                                            <p className="text-sm text-gray-500 mt-1">Disarankan ukuran gambar 150px x 150px</p>
                                         </div>
                                         {logoPreview && (
-                                            <Button 
-                                                type="button" 
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={handleRemoveLogo}
-                                            >
-                                                Hapus
-                                            </Button>
+                                            <Button type="button" variant="secondary" size="sm" onClick={handleRemoveLogo}>Hapus</Button>
                                         )}
                                     </div>
                                     <InputError message={formErrors.app_logo} className="mt-1" />
@@ -320,35 +355,15 @@ export default function SettingsIndex() {
                                     <div className="mt-2 flex items-center gap-4">
                                         {faviconPreview && (
                                             <div className="relative">
-                                                <img 
-                                                    src={faviconPreview} 
-                                                    alt="Favicon Preview" 
-                                                    className="h-12 w-auto object-contain rounded border p-1"
-                                                />
+                                                <img src={faviconPreview} alt="Favicon Preview" className="h-12 w-auto object-contain rounded border p-1" />
                                             </div>
                                         )}
                                         <div className="flex-1">
-                                            <Input 
-                                                id="app_favicon" 
-                                                name="app_favicon" 
-                                                type="file" 
-                                                onChange={handleFaviconChange} 
-                                                className="mt-1 block w-full cursor-pointer"
-                                                accept="image/*"
-                                            />
-                                            <p className="text-sm text-gray-500 mt-1">
-                                                Disarankan ukuran gambar 16px x 16px atau 32px x 32px
-                                            </p>
+                                            <Input id="app_favicon" name="app_favicon" type="file" onChange={handleFaviconChange} className="mt-1 block w-full cursor-pointer" accept="image/*" />
+                                            <p className="text-sm text-gray-500 mt-1">Disarankan ukuran gambar 16px x 16px atau 32px x 32px</p>
                                         </div>
                                         {faviconPreview && (
-                                            <Button 
-                                                type="button" 
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={handleRemoveFavicon}
-                                            >
-                                                Hapus
-                                            </Button>
+                                            <Button type="button" variant="secondary" size="sm" onClick={handleRemoveFavicon}>Hapus</Button>
                                         )}
                                     </div>
                                     <InputError message={formErrors.app_favicon} className="mt-1" />
@@ -377,23 +392,122 @@ export default function SettingsIndex() {
                                             <option value="id">Indonesia</option>
                                             <option value="en">English</option>
                                         </select>
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Bahasa utama yang digunakan dalam aplikasi
-                                        </p>
+                                        <p className="text-sm text-gray-500 mt-1">Bahasa utama yang digunakan dalam aplikasi</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
                     </TabsContent>
 
-                    <div className="flex items-center justify-end space-x-4 pt-4">
-                        <Button type="button" variant="secondary" onClick={() => reset('app_name', 'app_currency', 'low_stock_threshold', 'default_profit_margin', 'language', 'app_logo', 'app_favicon', 'remove_logo', 'remove_favicon')}>
-                            Reset
-                        </Button>
-                        <Button type="submit" disabled={processing} className="bg-green-600 hover:bg-green-700">
-                            {processing ? 'Menyimpan...' : 'Simpan Pengaturan'}
-                        </Button>
-                    </div>
+                    <TabsContent value="reset" className="space-y-6">
+                        <Card className="border-red-200 dark:border-red-800">
+                            <CardHeader className="bg-red-50 dark:bg-red-900/20">
+                                <CardTitle className="flex items-center gap-2 text-red-600">
+                                    <Trash2 className="h-5 w-5" />
+                                    Reset Data
+                                </CardTitle>
+                                <CardDescription className="text-red-600/80">
+                                    Perhatian! Fitur ini akan menghapus data secara permanen. Pilih data yang ingin direset.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 pt-4">
+                                <div className="space-y-3">
+                                    {resetDataOptions.map((option) => (
+                                        <div key={option.id} className="flex items-center space-x-3">
+                                            <input
+                                                type="checkbox"
+                                                id={option.id}
+                                                checked={resetOptions.includes(option.id) || resetOptions.includes('all')}
+                                                onChange={() => toggleResetOption(option.id)}
+                                                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                            />
+                                            <Label htmlFor={option.id} className="flex items-center justify-between flex-1 cursor-pointer">
+                                                <span>{option.label}</span>
+                                                <span className="text-sm text-gray-500">({option.count} data)</span>
+                                            </Label>
+                                        </div>
+                                    ))}
+                                    
+                                    <div className="flex items-center space-x-3 pt-2 border-t">
+                                        <input
+                                            type="checkbox"
+                                            id="all"
+                                            checked={resetOptions.includes('all')}
+                                            onChange={() => toggleResetOption('all')}
+                                            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                        />
+                                        <Label htmlFor="all" className="flex items-center justify-between flex-1 cursor-pointer font-semibold">
+                                            <span>Reset Semua Data</span>
+                                        </Label>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4">
+                                    <Button
+                                        type="button"
+                                        onClick={handleResetData}
+                                        disabled={resetOptions.length === 0 || isResetting}
+                                        variant="destructive"
+                                        className="w-full"
+                                    >
+                                        {isResetting ? 'Memproses...' : 'Reset Data Sekarang'}
+                                    </Button>
+                                </div>
+
+                                {showResetConfirm && (
+                                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+                                            <div className="flex items-center gap-3 text-red-600 mb-4">
+                                                <AlertTriangle className="h-6 w-6" />
+                                                <h3 className="text-lg font-semibold">Konfirmasi Reset Data</h3>
+                                            </div>
+                                            <p className="text-gray-600 dark:text-gray-300 mb-6">
+                                                Anda yakin ingin mereset data berikut? Tindakan ini tidak dapat dibatalkan.
+                                            </p>
+                                            <ul className="text-sm text-gray-500 mb-6 space-y-1">
+                                                {resetOptions.includes('all') ? (
+                                                    <li>• Semua Data</li>
+                                                ) : (
+                                                    resetOptions.map(opt => {
+                                                        const option = resetDataOptions.find(o => o.id === opt);
+                                                        return option ? <li key={opt}>• {option.label} ({option.count} data)</li> : null;
+                                                    })
+                                                )}
+                                            </ul>
+                                            <div className="flex gap-3">
+                                                <Button
+                                                    type="button"
+                                                    variant="secondary"
+                                                    onClick={() => setShowResetConfirm(false)}
+                                                    className="flex-1"
+                                                >
+                                                    Batal
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    onClick={confirmResetData}
+                                                    className="flex-1 bg-red-600 hover:bg-red-700"
+                                                >
+                                                    Ya, Reset
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {activeTab !== 'reset' && (
+                        <div className="flex items-center justify-end space-x-4 pt-4">
+                            <Button type="button" variant="secondary" onClick={() => reset('app_name', 'app_currency', 'low_stock_threshold', 'default_profit_margin', 'language', 'app_logo', 'app_favicon', 'remove_logo', 'remove_favicon')}>
+                                Reset
+                            </Button>
+                            <Button type="submit" disabled={processing} className="bg-green-600 hover:bg-green-700">
+                                {processing ? 'Menyimpan...' : 'Simpan Pengaturan'}
+                            </Button>
+                        </div>
+                    )}
                 </form>
             </Tabs>
         </AppLayout>
